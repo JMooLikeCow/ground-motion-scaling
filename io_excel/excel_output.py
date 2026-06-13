@@ -176,10 +176,10 @@ def _write_records_log(wb, at2_records, scaling_results):
 
 def _write_plots(wb, figures: dict[str, go.Figure]):
     plot_sheet_names = {
-        "spectra": "PLOT_SPECTRA",
-        "sigma": "PLOT_SIGMA",
-        "sf": "PLOT_SF",
-        "deviation": "PLOT_DEV",
+        "spectra_full": "PLOT_SPECTRA_FULL",
+        "spectra_zoom": "PLOT_SPECTRA_ZOOM",
+        "deviation_full": "PLOT_DEV_FULL",
+        "deviation_zoom": "PLOT_DEV_ZOOM",
     }
 
     for key, sheet_name in plot_sheet_names.items():

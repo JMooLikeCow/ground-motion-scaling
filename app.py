@@ -14,9 +14,9 @@ from core.scaling import scale_suite
 from core.compliance import check_compliance, ALPHA_DEFAULTS
 from ui.plots import (
     plot_spectra_overlay,
-    plot_mean_sigma,
-    plot_scale_factors,
+    plot_spectra_overlay_zoomed,
     plot_deviation_ratio,
+    plot_deviation_ratio_zoomed,
     plot_time_histories,
 )
 from ui.report import build_report
@@ -419,14 +419,7 @@ for code_name in codes_to_check:
 # DISPLAY RESULTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── Compliance summary table ──────────────────────────────────────────────────
-st.markdown("### Scale Factors")
-st.caption(
-    "Scale factors are dimensionless amplitude multipliers applied directly to the g-valued "
-    "acceleration time series. Unit conversion (g → m/s²) is applied internally for response "
-    "spectrum computation only and does not affect the scale factor values shown here."
-)
-st.markdown("### Compliance Summary")
+# ── Compliance warnings ───────────────────────────────────────────────────────
 for comp in compliance_results:
     if not comp.alpha_h_is_default:
         st.warning(
@@ -443,65 +436,78 @@ for comp in compliance_results:
         min_r = {"ASCE 7-22": 11, "EC8-1": 3}[comp.code]
         st.warning(f"⚠️ {n_records} record sets uploaded. {comp.code} recommends ≥ {min_r} records.")
 
-summary_data = []
+# ── Suite compliance status ───────────────────────────────────────────────────
+st.markdown("### Compliance Summary")
+for comp in compliance_results:
+    h_colour = "green" if comp.suite_pass_h else "red"
+    h_status = "PASS" if comp.suite_pass_h else f"FAIL (max deficiency {comp.deficiency_h*100:.1f}% below α×target at T = {comp.worst_period_h:.3f} s)"
+    st.markdown(f"**{comp.code} horizontal suite (α = {comp.alpha_h:.2f}):** :{h_colour}[{h_status}]")
+    if comp.suite_pass_v is not None:
+        v_colour = "green" if comp.suite_pass_v else "red"
+        v_status = "PASS" if comp.suite_pass_v else f"FAIL (max deficiency {comp.deficiency_v*100:.1f}% below α×target at T = {comp.worst_period_v:.3f} s)"
+        st.markdown(f"**{comp.code} vertical suite (α = {comp.alpha_v:.2f}):** :{v_colour}[{v_status}]")
+
+# ── Scale factors table ───────────────────────────────────────────────────────
+st.markdown("### Scale Factors")
+st.caption(
+    "Scale factors are dimensionless amplitude multipliers applied to the g-valued time series. "
+    "Per-record flags below indicate whether an individual record falls below the target — "
+    "these are informational only; suite mean compliance governs."
+)
+sf_table = []
 for rid, r in scaling_results.items():
-    row = {"Record ID": rid, "SF (H)": f"{r.sf_h:.4f}",
-           "SF (V)": f"{r.sf_v:.4f}" if r.sf_v else "—"}
+    row = {
+        "Record ID": rid,
+        "SF — Horizontal": f"{r.sf_h:.4f}",
+        "SF — Vertical":   f"{r.sf_v:.4f}" if r.sf_v else "—",
+        "Scaled PGA H1 (g)": f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
+    }
     for comp in compliance_results:
         for rr in comp.record_results:
             if rr.record_id == rid:
-                row[f"{comp.code} H (info)"] = "⚠ below" if rr.below_target_h else "ok"
+                row[f"{comp.code} H < target?"] = "Yes ⚠" if rr.below_target_h else "No"
                 if rr.below_target_v is not None:
-                    row[f"{comp.code} V (info)"] = "⚠ below" if rr.below_target_v else "ok"
-    summary_data.append(row)
+                    row[f"{comp.code} V < target?"] = "Yes ⚠" if rr.below_target_v else "No"
+    sf_table.append(row)
+st.dataframe(pd.DataFrame(sf_table), use_container_width=True, hide_index=True)
 
-st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
-
-for comp in compliance_results:
-    h_colour = "green" if comp.suite_pass_h else "red"
-    h_status = "PASS" if comp.suite_pass_h else f"FAIL (max deficiency {comp.deficiency_h*100:.1f}% at T={comp.worst_period_h:.3f}s)"
-    st.markdown(f"**{comp.code} horizontal suite:** :{h_colour}[{h_status}] (α = {comp.alpha_h:.2f})")
-    if comp.suite_pass_v is not None:
-        v_colour = "green" if comp.suite_pass_v else "red"
-        v_status = "PASS" if comp.suite_pass_v else f"FAIL (max deficiency {comp.deficiency_v*100:.1f}% at T={comp.worst_period_v:.3f}s)"
-        st.markdown(f"**{comp.code} vertical suite:** :{v_colour}[{v_status}] (α = {comp.alpha_v:.2f})")
-
-# ── Plots ─────────────────────────────────────────────────────────────────────
+# ── QA/QC Plots ───────────────────────────────────────────────────────────────
 st.markdown("### QA/QC Plots")
 figures = {}
+alpha_plot = compliance_results[0].alpha_h
+code_plot  = compliance_results[0].code
 
-# Plot 1 — Spectra overlay
+# Plot 1 — Full-range spectra overlay
 fig1 = plot_spectra_overlay(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
     params["t_min"], params["t_max"],
 )
 st.plotly_chart(fig1, use_container_width=True)
-figures["spectra"] = fig1
+figures["spectra_full"] = fig1
 
-# Plot 2 — Mean ± 1σ
-fig2 = plot_mean_sigma(
+# Plot 2 — Zoomed spectra overlay (period range of interest)
+fig2 = plot_spectra_overlay_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
     params["t_min"], params["t_max"],
 )
 st.plotly_chart(fig2, use_container_width=True)
-figures["sigma"] = fig2
+figures["spectra_zoom"] = fig2
 
-# Plot 3 — Scale factors
-sf_h_dict = {rid: r.sf_h for rid, r in scaling_results.items()}
-sf_v_dict_plot = {rid: r.sf_v for rid, r in scaling_results.items() if r.sf_v is not None} or None
-fig3 = plot_scale_factors(sf_h_dict, sf_v_dict_plot)
+# Plot 3 — Deviation ratio full range
+fig3 = plot_deviation_ratio(
+    PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
+    params["t_min"], params["t_max"], alpha_plot, code_plot,
+)
 st.plotly_chart(fig3, use_container_width=True)
-figures["sf"] = fig3
+figures["deviation_full"] = fig3
 
-# Plot 4 — Deviation ratio (use first compliance result's alpha)
-alpha_plot = compliance_results[0].alpha_h
-code_plot = compliance_results[0].code
-fig4 = plot_deviation_ratio(
+# Plot 4 — Deviation ratio zoomed
+fig4 = plot_deviation_ratio_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
     params["t_min"], params["t_max"], alpha_plot, code_plot,
 )
 st.plotly_chart(fig4, use_container_width=True)
-figures["deviation"] = fig4
+figures["deviation_zoom"] = fig4
 
 # Plot 5 — Time histories
 st.markdown("**Time Histories — select record:**")
