@@ -51,8 +51,13 @@ def build_report(
     # ── 3. Scale Factor Results ───────────────────────────────────────────────
     lines.append("## 3. Scale Factor Results")
     sf_h_vals = [r.sf_h for r in scaling_results.values()]
+    sf_h_ind_vals = [r.sf_h_individual for r in scaling_results.values()]
+    k_adj = list(scaling_results.values())[0].sf_h_suite_correction
+    lines.append(f"- **Scaling method:** Step 1 — per-record MSE minimisation; Step 2 — suite correction")
+    lines.append(f"- **Suite correction factor (horizontal):** {k_adj:.4f}" +
+                 (" (no correction required)" if k_adj <= 1.001 else " (applied to all records)"))
+    lines.append(f"- **Final SF range (horizontal):** {min(sf_h_vals):.4f} – {max(sf_h_vals):.4f}")
     lines.append(f"- **Suite mean SF (horizontal):** {np.mean(sf_h_vals):.4f}")
-    lines.append(f"- **SF range (horizontal):** {min(sf_h_vals):.4f} – {max(sf_h_vals):.4f}")
 
     if has_vertical:
         sf_v_vals = [r.sf_v for r in scaling_results.values() if r.sf_v is not None]
@@ -61,11 +66,11 @@ def build_report(
             lines.append(f"- **SF range (vertical):** {min(sf_v_vals):.4f} – {max(sf_v_vals):.4f}")
 
     lines.append("")
-    lines.append("| Record ID | SF (H) | SF (V) |")
-    lines.append("|---|---|---|")
+    lines.append("| Record ID | SF MSE fit | Suite correction | SF final (H) | SF final (V) |")
+    lines.append("|---|---|---|---|---|")
     for rid, r in scaling_results.items():
         sf_v_str = f"{r.sf_v:.4f}" if r.sf_v is not None else "N/A"
-        lines.append(f"| {rid} | {r.sf_h:.4f} | {sf_v_str} |")
+        lines.append(f"| {rid} | {r.sf_h_individual:.4f} | ×{r.sf_h_suite_correction:.4f} | {r.sf_h:.4f} | {sf_v_str} |")
     lines.append("")
 
     # ── 4. Compliance Results ─────────────────────────────────────────────────

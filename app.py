@@ -10,7 +10,7 @@ import streamlit as st
 
 from core.at2_parser import parse_at2, group_records, GroundMotionRecord
 from core.response_spectrum import compute_response_spectrum, PERIOD_ARRAY
-from core.scaling import scale_suite
+from core.scaling import scale_suite, SuiteScalingMetadata
 from core.compliance import check_compliance, ALPHA_DEFAULTS
 from ui.plots import (
     plot_spectra_overlay,
@@ -369,8 +369,15 @@ with st.spinner("Computing scale factors..."):
     t_min_v_val = params["t_min_v"] if has_vertical and sa_target_v_interp is not None else None
     t_max_v_val = params["t_max_v"] if has_vertical and sa_target_v_interp is not None else None
 
+    # Resolve alpha values: use user override if provided, else use code default
+    codes_to_check = ["ASCE 7-22", "EC8-1"] if params["code"] == "Both" else [params["code"]]
+    # For scaling, use the first selected code's alpha as the suite correction target
+    primary_code = codes_to_check[0]
+    alpha_h_scaling = params["alpha_h"] if params["alpha_h"] is not None else ALPHA_DEFAULTS[primary_code]
+    alpha_v_scaling = params["alpha_v"] if params["alpha_v"] is not None else ALPHA_DEFAULTS[primary_code]
+
     try:
-        scaling_results = scale_suite(
+        scaling_results, scaling_metadata = scale_suite(
             spectra_h1=spectra_h1,
             spectra_h2=spectra_h2 if spectra_h2 else None,
             spectra_v=spectra_v if spectra_v else None,
@@ -382,20 +389,30 @@ with st.spinner("Computing scale factors..."):
             t_min_v=t_min_v_val,
             t_max_v=t_max_v_val,
             combination_method=params["combination_method"],
+            alpha_h=alpha_h_scaling,
+            alpha_v=alpha_v_scaling,
         )
     except Exception as e:
         st.error(f"Scaling error: {e}")
         st.stop()
 
+    # Show suite correction notice if it was applied
+    if scaling_metadata.suite_correction_h > 1.001:
+        st.info(
+            f"ℹ️ Suite correction applied: individual MSE scale factors were multiplied by "
+            f"**{scaling_metadata.suite_correction_h:.4f}** to bring the suite mean up to "
+            f"α × target (α = {alpha_h_scaling:.2f}) across the full scaling period range."
+        )
+
 # ── Compliance ────────────────────────────────────────────────────────────────
-codes_to_check = ["ASCE 7-22", "EC8-1"] if params["code"] == "Both" else [params["code"]]
 compliance_results = []
 
 scaled_combined = {rid: r.sa_combined_scaled for rid, r in scaling_results.items()}
-scaled_v_dict = {rid: r.sa_v_scaled for rid, r in scaling_results.items() if r.sa_v_scaled is not None}
+scaled_v_dict = {rid: r.sf_v * r.sa_v_unscaled
+                 for rid, r in scaling_results.items()
+                 if r.sf_v is not None and r.sa_v_unscaled is not None}
 
 for code_name in codes_to_check:
-    default_alpha = ALPHA_DEFAULTS[code_name]
     alpha_h = params["alpha_h"] if params["alpha_h"] is not None else None
     alpha_v = params["alpha_v"] if params["alpha_v"] is not None else None
 
@@ -458,9 +475,12 @@ sf_table = []
 for rid, r in scaling_results.items():
     row = {
         "Record ID": rid,
-        "SF — Horizontal": f"{r.sf_h:.4f}",
-        "SF — Vertical":   f"{r.sf_v:.4f}" if r.sf_v else "—",
-        "Scaled PGA H1 (g)": f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
+        "SF (H) — MSE fit": f"{r.sf_h_individual:.4f}",
+        "Suite correction": f"×{r.sf_h_suite_correction:.4f}",
+        "SF (H) — final": f"{r.sf_h:.4f}",
+        "SF (V) — final":  f"{r.sf_v:.4f}" if r.sf_v else "—",
+        "Unscaled PGA H1 (g)": f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
+        "Scaled PGA H1 (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
     }
     for comp in compliance_results:
         for rr in comp.record_results:
