@@ -17,19 +17,31 @@ COLOURS = [
 
 def _period_axis_layout():
     return dict(
-        type="log",
-        title="Period (s)",
+        type="linear",
+        title=dict(text="Period (s)", font=dict(color="black")),
         showgrid=True,
         gridcolor="#e0e0e0",
-        tickformat=".2g",
+        tickfont=dict(color="black"),
+        linecolor="black",
     )
 
 
 def _sa_axis_layout():
     return dict(
-        title="Sa (g)",
+        title=dict(text="Sa (g)", font=dict(color="black")),
         showgrid=True,
         gridcolor="#e0e0e0",
+        tickfont=dict(color="black"),
+        linecolor="black",
+    )
+
+
+def _base_layout():
+    return dict(
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(color="black"),
+        legend=dict(font=dict(color="black", size=10)),
     )
 
 
@@ -66,9 +78,10 @@ def plot_spectra_overlay(
     _add_period_range_band(fig, t_min, t_max)
 
     fig.update_layout(
-        title=title, xaxis=_period_axis_layout(), yaxis=_sa_axis_layout(),
-        legend=dict(font=dict(size=10)), hovermode="x unified",
-        plot_bgcolor="white", paper_bgcolor="white",
+        title=dict(text=title, font=dict(color="black")),
+        xaxis=_period_axis_layout(), yaxis=_sa_axis_layout(),
+        hovermode="x unified",
+        **_base_layout(),
     )
     return fig
 
@@ -107,8 +120,10 @@ def plot_mean_sigma(
     _add_period_range_band(fig, t_min, t_max)
 
     fig.update_layout(
-        title=title, xaxis=_period_axis_layout(), yaxis=_sa_axis_layout(),
-        hovermode="x unified", plot_bgcolor="white", paper_bgcolor="white",
+        title=dict(text=title, font=dict(color="black")),
+        xaxis=_period_axis_layout(), yaxis=_sa_axis_layout(),
+        hovermode="x unified",
+        **_base_layout(),
     )
     return fig
 
@@ -143,12 +158,17 @@ def plot_scale_factors(
     )
 
     fig.update_layout(
-        title=title,
-        xaxis_title="Record ID",
-        yaxis_title="Scale Factor",
+        title=dict(text=title, font=dict(color="black")),
+        xaxis=dict(
+            title=dict(text="Record ID", font=dict(color="black")),
+            tickangle=-30, tickfont=dict(color="black"), linecolor="black",
+        ),
+        yaxis=dict(
+            title=dict(text="Scale Factor (dimensionless)", font=dict(color="black")),
+            tickfont=dict(color="black"), linecolor="black", showgrid=True, gridcolor="#e0e0e0",
+        ),
         barmode="group",
-        plot_bgcolor="white", paper_bgcolor="white",
-        xaxis=dict(tickangle=-30),
+        **_base_layout(),
     )
     return fig
 
@@ -189,10 +209,15 @@ def plot_deviation_ratio(
     _add_period_range_band(fig, t_min, t_max)
 
     fig.update_layout(
-        title=title,
+        title=dict(text=title, font=dict(color="black")),
         xaxis=_period_axis_layout(),
-        yaxis=dict(title="Mean Sa / Target Sa", showgrid=True, gridcolor="#e0e0e0"),
-        hovermode="x unified", plot_bgcolor="white", paper_bgcolor="white",
+        yaxis=dict(
+            title=dict(text="Mean Sa / Target Sa", font=dict(color="black")),
+            showgrid=True, gridcolor="#e0e0e0",
+            tickfont=dict(color="black"), linecolor="black",
+        ),
+        hovermode="x unified",
+        **_base_layout(),
     )
     return fig
 
@@ -245,13 +270,26 @@ def plot_time_histories(
             row=row, col=1, font=dict(size=10),
         )
 
-    fig.update_xaxes(title_text="Time (s)", row=len(components), col=1)
-    fig.update_yaxes(title_text="Acceleration (g)")
+    fig.update_xaxes(
+        title_text="Time (s)",
+        title_font=dict(color="black"),
+        tickfont=dict(color="black"),
+        linecolor="black",
+        showgrid=True, gridcolor="#e0e0e0",
+        row=len(components), col=1,
+    )
+    fig.update_yaxes(
+        title_text="Acceleration (g)",
+        title_font=dict(color="black"),
+        tickfont=dict(color="black"),
+        linecolor="black",
+        showgrid=True, gridcolor="#e0e0e0",
+    )
     fig.update_layout(
-        title=f"Time Histories — {selected_id}",
+        title=dict(text=f"Time Histories — {selected_id} (grey = unscaled, colour = scaled)", font=dict(color="black")),
         height=280 * len(components),
-        plot_bgcolor="white", paper_bgcolor="white",
         hovermode="x unified",
+        **_base_layout(),
     )
     return fig
 

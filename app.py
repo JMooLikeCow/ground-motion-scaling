@@ -199,8 +199,31 @@ else:
             "Horizontal SF method",
             ["geomean", "srss"],
             format_func=lambda x: "Geometric Mean" if x == "geomean" else "SRSS (ASCE 7-22 §16.2.3)",
-            help="Method used to combine H1 and H2 spectra before computing the horizontal scale factor.",
         )
+        with st.expander("ℹ️ Which method should I use?"):
+            st.markdown("""
+**Geometric Mean** computes the combined spectrum as:
+
+`Sa_pair(T) = √( Sa_H1(T) × Sa_H2(T) )`
+
+This represents the average energy of the two horizontal components at each period. It is widely used in practice and is the basis of the RotD50 intensity measure, which is the standard output of the PEER NGA database. If your target spectrum is defined in terms of RotD50 (as is the case for most ASCE 7 site-specific spectra and USGS hazard outputs), **Geometric Mean is the appropriate choice** as it is consistent with the definition of the target.
+
+---
+
+**SRSS (Square Root of Sum of Squares)** computes:
+
+`Sa_pair(T) = √( Sa_H1(T)² + Sa_H2(T)² )`
+
+This represents the maximum resultant response across both components simultaneously. It is referenced in **ASCE 7-22 §16.2.3** as the combination rule for checking suite compliance. It produces values approximately 1.41× (√2) larger than the geometric mean at any given period, which means it will result in smaller scale factors for the same target. Some engineers apply SRSS when the target spectrum has already been developed on an SRSS or RotD100 basis. Using SRSS against a RotD50 target is overly conservative.
+
+---
+
+**Practical guidance:**
+- Target spectrum from USGS, ASCE 7, or PEER CMS → use **Geometric Mean**
+- Target spectrum explicitly defined on an SRSS or RotD100 basis → use **SRSS**
+- When in doubt, use **Geometric Mean** — it is the more common practice basis
+            """)
+
 
     st.markdown("#### Spectral Tolerance (α)")
     st.caption(
@@ -397,6 +420,12 @@ for code_name in codes_to_check:
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── Compliance summary table ──────────────────────────────────────────────────
+st.markdown("### Scale Factors")
+st.caption(
+    "Scale factors are dimensionless amplitude multipliers applied directly to the g-valued "
+    "acceleration time series. Unit conversion (g → m/s²) is applied internally for response "
+    "spectrum computation only and does not affect the scale factor values shown here."
+)
 st.markdown("### Compliance Summary")
 for comp in compliance_results:
     if not comp.alpha_h_is_default:
