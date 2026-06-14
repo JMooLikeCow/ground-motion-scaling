@@ -552,7 +552,7 @@ st.caption(
     "these are informational only; suite mean compliance governs."
 )
 sf_table = []
-_use_logspace = params.get("scaling_method", "mse") == "logspace"
+_use_logspace = scaling_metadata.scaling_method == "logspace"
 
 def _pga(arr):
     return f"{float(np.max(np.abs(arr))):.4f}" if arr is not None else "—"
