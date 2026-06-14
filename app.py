@@ -478,8 +478,8 @@ for rid, r in scaling_results.items():
         "k2 (suite correction)": f"×{r.sf_h_k2:.4f}",
         "SF (H) = k1 × k2": f"{r.sf_h:.4f}",
         "SF (V) — final":  f"{r.sf_v:.4f}" if r.sf_v else "—",
-        "Unscaled PGA H1 (g)": f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
-        "Scaled PGA H1 (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
+        "Unscaled PGA (g)": f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
+        "Scaled PGA (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
     }
     sf_table.append(row)
 st.dataframe(pd.DataFrame(sf_table), use_container_width=True, hide_index=True)

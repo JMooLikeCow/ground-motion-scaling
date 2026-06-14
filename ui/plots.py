@@ -198,17 +198,19 @@ def plot_deviation_ratio(
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=periods, y=ratio, name="Mean / Target",
+        x=periods, y=ratio, name="Mean Sa / Target Sa",
         line=dict(color="#1f77b4", width=2.5),
     ))
-    fig.add_hline(y=1.0, line_dash="solid", line_color="red",
-                  annotation_text="1.0 (target)", annotation_position="top right",
-                  annotation_font=dict(color="black"))
-    if not np.isclose(alpha_h, 1.0):
-        fig.add_hline(y=alpha_h, line_dash="dash", line_color="orange",
-                      annotation_text=f"α = {alpha_h:.2f} ({code})",
-                      annotation_position="bottom right",
-                      annotation_font=dict(color="black"))
+    fig.add_trace(go.Scatter(
+        x=periods, y=np.ones_like(periods), name="Target (ratio = 1.0)",
+        line=dict(color="red", width=1.5, dash="solid"),
+        opacity=0.70,
+    ))
+    fig.add_trace(go.Scatter(
+        x=periods, y=np.full_like(periods, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
+        line=dict(color="red", width=1.5, dash="dash"),
+        opacity=0.70,
+    ))
     _range_band(fig, t_min, t_max)
 
     fig.update_layout(
@@ -250,17 +252,19 @@ def plot_deviation_ratio_zoomed(
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=p_zoom, y=ratio, name="Mean / Target",
+        x=p_zoom, y=ratio, name="Mean Sa / Target Sa",
         line=dict(color="#1f77b4", width=2.5),
     ))
-    fig.add_hline(y=1.0, line_dash="solid", line_color="red",
-                  annotation_text="1.0 (target)", annotation_position="top right",
-                  annotation_font=dict(color="black"))
-    if not np.isclose(alpha_h, 1.0):
-        fig.add_hline(y=alpha_h, line_dash="dash", line_color="orange",
-                      annotation_text=f"α = {alpha_h:.2f} ({code})",
-                      annotation_position="bottom right",
-                      annotation_font=dict(color="black"))
+    fig.add_trace(go.Scatter(
+        x=p_zoom, y=np.ones_like(p_zoom), name="Target (ratio = 1.0)",
+        line=dict(color="red", width=1.5, dash="solid"),
+        opacity=0.70,
+    ))
+    fig.add_trace(go.Scatter(
+        x=p_zoom, y=np.full_like(p_zoom, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
+        line=dict(color="red", width=1.5, dash="dash"),
+        opacity=0.70,
+    ))
 
     x_pad = (t_max - t_min) * 0.05
     fig.update_layout(
