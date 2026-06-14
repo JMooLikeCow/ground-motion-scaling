@@ -502,19 +502,23 @@ _mask_sr = (PERIOD_ARRAY >= params["t_min"]) & (PERIOD_ARRAY <= params["t_max"])
 _periods_sr = PERIOD_ARRAY[_mask_sr]
 _target_sr = sa_target_h_interp[_mask_sr]
 
-_ratio_data: dict[str, list] = {"Period (s)": [f"{t:.3f}" for t in _periods_sr]}
+_all_scaled_sr = np.vstack([r.sa_combined_scaled[_mask_sr] for r in scaling_results.values()])
+_mean_sr = np.mean(_all_scaled_sr, axis=0)
+_mean_ratios_sr = [round(float(v), 3) for v in np.where(_target_sr > 0, _mean_sr / _target_sr, np.nan)]
+
+# Suite Mean first, then individual records
+_ratio_data: dict[str, list] = {
+    "Period (s)": [f"{t:.3f}" for t in _periods_sr],
+    "Suite Mean": _mean_ratios_sr,
+}
 for rid, r in scaling_results.items():
     _sa_rec = r.sa_combined_scaled[_mask_sr]
     _ratios = np.where(_target_sr > 0, _sa_rec / _target_sr, np.nan)
     _ratio_data[rid] = [round(float(v), 3) for v in _ratios]
 
-_all_scaled_sr = np.vstack([r.sa_combined_scaled[_mask_sr] for r in scaling_results.values()])
-_mean_sr = np.mean(_all_scaled_sr, axis=0)
-_ratio_data["Suite Mean"] = [round(float(v), 3) for v in np.where(_target_sr > 0, _mean_sr / _target_sr, np.nan)]
-
 _ratio_df = pd.DataFrame(_ratio_data)
 
-def _colour_ratio(val):
+def _colour_suite_mean(val):
     try:
         v = float(val)
         if v < alpha_h_scaling:
@@ -525,50 +529,36 @@ def _colour_ratio(val):
         pass
     return ""
 
-_numeric_cols = [c for c in _ratio_df.columns if c != "Period (s)"]
 try:
-    _styled = _ratio_df.style.map(_colour_ratio, subset=_numeric_cols)
+    _styled = _ratio_df.style.map(_colour_suite_mean, subset=["Suite Mean"])
 except AttributeError:
-    _styled = _ratio_df.style.applymap(_colour_ratio, subset=_numeric_cols)
+    _styled = _ratio_df.style.applymap(_colour_suite_mean, subset=["Suite Mean"])
 st.dataframe(_styled, use_container_width=True, hide_index=True)
 
 # ── QA/QC Plots ───────────────────────────────────────────────────────────────
 st.markdown("### QA/QC Plots")
-figures = {}
 alpha_plot = compliance_results[0].alpha_h
 code_plot  = compliance_results[0].code
 
-# Plot 1 — Full-range spectra overlay
-fig1 = plot_spectra_overlay(
+st.plotly_chart(plot_spectra_overlay(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
     params["t_min"], params["t_max"], alpha_plot,
-)
-st.plotly_chart(fig1, use_container_width=True)
-figures["spectra_full"] = fig1
+), use_container_width=True)
 
-# Plot 2 — Zoomed spectra overlay (period range of interest)
-fig2 = plot_spectra_overlay_zoomed(
+st.plotly_chart(plot_spectra_overlay_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
     params["t_min"], params["t_max"], alpha_plot,
-)
-st.plotly_chart(fig2, use_container_width=True)
-figures["spectra_zoom"] = fig2
+), use_container_width=True)
 
-# Plot 3 — Deviation ratio full range
-fig3 = plot_deviation_ratio(
+st.plotly_chart(plot_deviation_ratio(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
     params["t_min"], params["t_max"], alpha_plot, code_plot,
-)
-st.plotly_chart(fig3, use_container_width=True)
-figures["deviation_full"] = fig3
+), use_container_width=True)
 
-# Plot 4 — Deviation ratio zoomed
-fig4 = plot_deviation_ratio_zoomed(
+st.plotly_chart(plot_deviation_ratio_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
     params["t_min"], params["t_max"], alpha_plot, code_plot,
-)
-st.plotly_chart(fig4, use_container_width=True)
-figures["deviation_zoom"] = fig4
+), use_container_width=True)
 
 # ── Design Note ───────────────────────────────────────────────────────────────
 st.markdown("### Design Note")
@@ -594,9 +584,11 @@ with st.spinner("Generating Excel output..."):
             scaling_results=scaling_results,
             compliance_results=compliance_results,
             report_md=report_md,
-            figures=figures,
             periods=PERIOD_ARRAY,
             at2_records=grouped,
+            sa_target_h=sa_target_h_interp,
+            t_min=params["t_min"],
+            t_max=params["t_max"],
         )
         st.download_button(
             "⬇️ Download results.xlsx",
