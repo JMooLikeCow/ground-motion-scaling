@@ -481,12 +481,6 @@ for rid, r in scaling_results.items():
         "Unscaled PGA H1 (g)": f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
         "Scaled PGA H1 (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
     }
-    for comp in compliance_results:
-        for rr in comp.record_results:
-            if rr.record_id == rid:
-                row[f"{comp.code} H < α·target?"] = "Yes ⚠" if rr.below_target_h else "No"
-                if rr.below_target_v is not None:
-                    row[f"{comp.code} V < α·target?"] = "Yes ⚠" if rr.below_target_v else "No"
     sf_table.append(row)
 st.dataframe(pd.DataFrame(sf_table), use_container_width=True, hide_index=True)
 
@@ -504,7 +498,8 @@ _target_sr = sa_target_h_interp[_mask_sr]
 
 _all_scaled_sr = np.vstack([r.sa_combined_scaled[_mask_sr] for r in scaling_results.values()])
 _mean_sr = np.mean(_all_scaled_sr, axis=0)
-_mean_ratios_sr = [round(float(v), 3) for v in np.where(_target_sr > 0, _mean_sr / _target_sr, np.nan)]
+_mean_ratios_sr = [f"{v:.3f}" if np.isfinite(v) else "—"
+                   for v in np.where(_target_sr > 0, _mean_sr / _target_sr, np.nan)]
 
 # Suite Mean first, then individual records
 _ratio_data: dict[str, list] = {
@@ -514,13 +509,13 @@ _ratio_data: dict[str, list] = {
 for rid, r in scaling_results.items():
     _sa_rec = r.sa_combined_scaled[_mask_sr]
     _ratios = np.where(_target_sr > 0, _sa_rec / _target_sr, np.nan)
-    _ratio_data[rid] = [round(float(v), 3) for v in _ratios]
+    _ratio_data[rid] = [f"{v:.3f}" if np.isfinite(v) else "—" for v in _ratios]
 
 _ratio_df = pd.DataFrame(_ratio_data)
 
 def _colour_suite_mean(val):
     try:
-        v = float(val)
+        v = float(str(val))
         if v < alpha_h_scaling:
             return "background-color: #FFCCCC; color: black"
         elif v < 1.0:
