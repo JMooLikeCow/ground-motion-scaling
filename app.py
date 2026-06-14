@@ -526,11 +526,11 @@ def _colour_ratio(val):
     return ""
 
 _numeric_cols = [c for c in _ratio_df.columns if c != "Period (s)"]
-st.dataframe(
-    _ratio_df.style.applymap(_colour_ratio, subset=_numeric_cols),
-    use_container_width=True,
-    hide_index=True,
-)
+try:
+    _styled = _ratio_df.style.map(_colour_ratio, subset=_numeric_cols)
+except AttributeError:
+    _styled = _ratio_df.style.applymap(_colour_ratio, subset=_numeric_cols)
+st.dataframe(_styled, use_container_width=True, hide_index=True)
 
 # ── QA/QC Plots ───────────────────────────────────────────────────────────────
 st.markdown("### QA/QC Plots")
