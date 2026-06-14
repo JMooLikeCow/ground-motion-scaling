@@ -561,14 +561,6 @@ st.caption(
 sf_table = []
 _use_logspace = scaling_metadata.scaling_method == "logspace"
 
-# ── TEMPORARY DEBUG — remove after confirming ─────────────────────────────────
-st.info(
-    f"DEBUG → scaling_metadata.scaling_method = `{scaling_metadata.scaling_method!r}` | "
-    f"_use_logspace = `{_use_logspace}` | "
-    f"sample sa_h2_unscaled is None: `{next(iter(scaling_results.values())).sa_h2_unscaled is None}`"
-)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _pga(arr):
     return f"{float(np.max(np.abs(arr))):.4f}" if arr is not None else "—"
 
@@ -635,8 +627,11 @@ if _use_logspace:
             _comp_spectra[f"{rid} — H1"] = r.sf_h * r.sa_h1_unscaled[_mask_sr]
         if r.sa_h2_unscaled is not None:
             _comp_spectra[f"{rid} — H2"] = r.sf_h * r.sa_h2_unscaled[_mask_sr]
-    _all_comp = np.vstack(list(_comp_spectra.values()))
-    _mean_sr = np.mean(_all_comp, axis=0)
+    # Suite Mean must reflect the compliance-governing quantity: the mean of the
+    # combined (SRSS/geomean) scaled pair spectra — NOT the mean of the individual
+    # H1/H2 components (which is ~1/√2 lower and would contradict the PASS/FAIL result).
+    _all_combined = np.vstack([r.sa_combined_scaled[_mask_sr] for r in scaling_results.values()])
+    _mean_sr = np.mean(_all_combined, axis=0)
     _ratio_data["Suite Mean"] = _fmt_ratios(_mean_sr, _target_sr)
     for col_id, sa in _comp_spectra.items():
         _ratio_data[col_id] = _fmt_ratios(sa, _target_sr)
