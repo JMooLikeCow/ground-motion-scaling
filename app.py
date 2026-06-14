@@ -553,26 +553,45 @@ st.caption(
 )
 sf_table = []
 _use_logspace = params.get("scaling_method", "mse") == "logspace"
-for rid, r in scaling_results.items():
-    row = {"Record ID": rid}
-    if _use_logspace:
-        row["k1 — H (shape fit)"]    = f"{r.sf_h_k1:.4f}"
-        row["k2 — H (suite corr.)"]  = f"×{r.sf_h_k2:.4f}"
-        row["SF (H) = k1×k2"]        = f"{r.sf_h:.4f}"
-        if r.sf_v is not None:
-            row["k1 — V (shape fit)"]   = f"{r.sf_v_k1:.4f}" if r.sf_v_k1 is not None else "—"
-            row["k2 — V (suite corr.)"] = f"×{r.sf_v_k2:.4f}" if r.sf_v_k2 is not None else "—"
-            row["SF (V) = k1×k2"]       = f"{r.sf_v:.4f}"
-        else:
-            row["k1 — V (shape fit)"]   = "—"
-            row["k2 — V (suite corr.)"] = "—"
-            row["SF (V) = k1×k2"]       = "—"
-    else:
-        row["Scale Factor (H)"] = f"{r.sf_h:.4f}"
-        row["Scale Factor (V)"] = f"{r.sf_v:.4f}" if r.sf_v else "—"
-    row["Unscaled PGA (g)"] = f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—"
-    row["Scaled PGA (g)"]   = f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—"
-    sf_table.append(row)
+
+def _pga(arr):
+    return f"{float(np.max(np.abs(arr))):.4f}" if arr is not None else "—"
+
+if _use_logspace:
+    # One row per component (H1, H2, and optionally V) per record pair.
+    # k1/k2 are the same for H1 and H2 within a pair (derived from combined spectrum).
+    for rid, r in scaling_results.items():
+        for comp_label, arr in [("H1", r.sa_h1_unscaled), ("H2", r.sa_h2_unscaled)]:
+            if arr is None:
+                continue
+            sf_table.append({
+                "Component": f"{rid} — {comp_label}",
+                "k1 (shape fit)":    f"{r.sf_h_k1:.4f}",
+                "k2 (suite corr.)":  f"×{r.sf_h_k2:.4f}",
+                "SF = k1×k2":        f"{r.sf_h:.4f}",
+                "Unscaled PGA (g)":  _pga(arr),
+                "Scaled PGA (g)":    f"{r.sf_h * float(np.max(np.abs(arr))):.4f}",
+            })
+        if r.sf_v is not None and r.sa_v_unscaled is not None:
+            sf_table.append({
+                "Component": f"{rid} — V",
+                "k1 (shape fit)":    f"{r.sf_v_k1:.4f}" if r.sf_v_k1 is not None else "—",
+                "k2 (suite corr.)":  f"×{r.sf_v_k2:.4f}" if r.sf_v_k2 is not None else "—",
+                "SF = k1×k2":        f"{r.sf_v:.4f}",
+                "Unscaled PGA (g)":  _pga(r.sa_v_unscaled),
+                "Scaled PGA (g)":    f"{r.sf_v * float(np.max(np.abs(r.sa_v_unscaled))):.4f}",
+            })
+else:
+    # One row per ground motion pair. Single SF applied to both H1 and H2.
+    for rid, r in scaling_results.items():
+        sf_table.append({
+            "Record ID":       rid,
+            "Scale Factor (H)": f"{r.sf_h:.4f}",
+            "Scale Factor (V)": f"{r.sf_v:.4f}" if r.sf_v else "—",
+            "Unscaled PGA (g)": _pga(r.sa_h1_unscaled),
+            "Scaled PGA (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
+        })
+
 st.dataframe(pd.DataFrame(sf_table), use_container_width=True, hide_index=True)
 
 # ── Spectral ratio table ──────────────────────────────────────────────────────
@@ -587,20 +606,32 @@ _mask_sr = (PERIOD_ARRAY >= params["t_min"]) & (PERIOD_ARRAY <= params["t_max"])
 _periods_sr = PERIOD_ARRAY[_mask_sr]
 _target_sr = sa_target_h_interp[_mask_sr]
 
-_all_scaled_sr = np.vstack([r.sa_combined_scaled[_mask_sr] for r in scaling_results.values()])
-_mean_sr = np.mean(_all_scaled_sr, axis=0)
-_mean_ratios_sr = [f"{v:.3f}" if np.isfinite(v) else "—"
-                   for v in np.where(_target_sr > 0, _mean_sr / _target_sr, np.nan)]
+def _fmt_ratios(sa_arr, target):
+    ratios = np.where(target > 0, sa_arr / target, np.nan)
+    return [f"{v:.3f}" if np.isfinite(v) else "—" for v in ratios]
 
-# Suite Mean first, then individual records
-_ratio_data: dict[str, list] = {
-    "Period (s)": [f"{t:.3f}" for t in _periods_sr],
-    "Suite Mean": _mean_ratios_sr,
-}
-for rid, r in scaling_results.items():
-    _sa_rec = r.sa_combined_scaled[_mask_sr]
-    _ratios = np.where(_target_sr > 0, _sa_rec / _target_sr, np.nan)
-    _ratio_data[rid] = [f"{v:.3f}" if np.isfinite(v) else "—" for v in _ratios]
+_ratio_data: dict[str, list] = {"Period (s)": [f"{t:.3f}" for t in _periods_sr]}
+
+if _use_logspace:
+    # Collect all individual component spectra (H1 and H2 scaled separately)
+    _comp_spectra: dict[str, np.ndarray] = {}
+    for rid, r in scaling_results.items():
+        if r.sa_h1_unscaled is not None:
+            _comp_spectra[f"{rid} — H1"] = r.sf_h * r.sa_h1_unscaled[_mask_sr]
+        if r.sa_h2_unscaled is not None:
+            _comp_spectra[f"{rid} — H2"] = r.sf_h * r.sa_h2_unscaled[_mask_sr]
+    _all_comp = np.vstack(list(_comp_spectra.values()))
+    _mean_sr = np.mean(_all_comp, axis=0)
+    _ratio_data["Suite Mean"] = _fmt_ratios(_mean_sr, _target_sr)
+    for col_id, sa in _comp_spectra.items():
+        _ratio_data[col_id] = _fmt_ratios(sa, _target_sr)
+else:
+    # One column per pair (combined spectrum)
+    _all_scaled_sr = np.vstack([r.sa_combined_scaled[_mask_sr] for r in scaling_results.values()])
+    _mean_sr = np.mean(_all_scaled_sr, axis=0)
+    _ratio_data["Suite Mean"] = _fmt_ratios(_mean_sr, _target_sr)
+    for rid, r in scaling_results.items():
+        _ratio_data[rid] = _fmt_ratios(r.sa_combined_scaled[_mask_sr], _target_sr)
 
 _ratio_df = pd.DataFrame(_ratio_data)
 
