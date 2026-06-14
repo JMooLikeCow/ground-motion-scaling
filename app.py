@@ -529,6 +529,12 @@ for comp in compliance_results:
 
 # ── Suite compliance status ───────────────────────────────────────────────────
 st.markdown("### Compliance Summary")
+_sf_method_label = (
+    "Linear MSE single factor (ASCE 7-22 §16.2)"
+    if scaling_metadata.scaling_method == "mse"
+    else "Log-space geometric mean (NZS 1170.5)"
+)
+st.caption(f"SF derivation method: **{_sf_method_label}** — one scalar applied to both H1 and H2 of each pair.")
 for comp in compliance_results:
     h_colour = "green" if comp.suite_pass_h else "red"
     h_status = "PASS" if comp.suite_pass_h else f"FAIL (max deficiency {comp.deficiency_h*100:.1f}% below α×target at T = {comp.worst_period_h:.3f} s)"
@@ -549,10 +555,8 @@ sf_table = []
 for rid, r in scaling_results.items():
     row = {
         "Record ID": rid,
-        "k1 (log-space fit)": f"{r.sf_h_k1:.4f}",
-        "k2 (suite correction)": f"×{r.sf_h_k2:.4f}",
-        "SF (H) = k1 × k2": f"{r.sf_h:.4f}",
-        "SF (V) — final":  f"{r.sf_v:.4f}" if r.sf_v else "—",
+        "Scale Factor (H)": f"{r.sf_h:.4f}",
+        "Scale Factor (V)": f"{r.sf_v:.4f}" if r.sf_v else "—",
         "Unscaled PGA (g)": f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
         "Scaled PGA (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
     }
