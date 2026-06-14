@@ -18,6 +18,7 @@ def build_report(
     t_max_v: float | None,
     damping: float,
     combination_method: str,
+    scaling_method: str,
     has_vertical: bool,
 ) -> str:
     """Return the full design note as a Markdown string."""
@@ -43,7 +44,12 @@ def build_report(
     lines.append(f"- **Horizontal scaling period range:** T_min = {t_min} s, T_max = {t_max} s")
     if has_vertical and t_min_v is not None:
         lines.append(f"- **Vertical scaling period range:** T_min = {t_min_v} s, T_max = {t_max_v} s")
-    lines.append("- **Scale factor derivation:** Two-step log-space geometric mean (k1) + suite correction (k2), aligned with NZS 1170.5 framework")
+    _method_desc = (
+        "Log-space geometric mean k1 + suite correction k2 (NZS 1170.5 framework)"
+        if scaling_method == "logspace" else
+        "Linear MSE single factor k1 + suite correction k2 (ASCE 7-22 §16.2)"
+    )
+    lines.append(f"- **Scale factor derivation:** {_method_desc}")
     lines.append("")
 
     # ── 3. Scale Factor Results ───────────────────────────────────────────────

@@ -35,6 +35,7 @@ class ScalingResult:
 @dataclass
 class SuiteScalingMetadata:
     combination_method: str
+    scaling_method: str                  # "logspace" or "mse"
     suite_correction_h: float            # k_adj for horizontal (1.0 if no correction)
     suite_correction_v: float | None     # k_adj for vertical
     alpha_h: float                       # tolerance used for suite correction
@@ -71,6 +72,35 @@ def _logspace_scale_factor(
         raise ValueError("Target spectrum has zero or negative values in scaling range.")
     log_ratios = np.log(sa_t / sa_r)
     return float(np.exp(np.mean(log_ratios)))
+
+
+def _mse_scale_factor(
+    sa_record: np.ndarray,
+    sa_target: np.ndarray,
+    periods: np.ndarray,
+    t_min: float,
+    t_max: float,
+) -> float:
+    """
+    Linear-space MSE scale factor over [t_min, t_max].
+    SF = Σ(Sa_r × Sa_t) / Σ(Sa_r²)
+    Closed-form minimiser of Σ(SF·Sa_r − Sa_t)².
+    Produces a single scalar applied to both H1 and H2 of a pair,
+    consistent with ASCE 7-22 §16.2 single-factor requirement.
+    High-Sa periods carry more weight than low-Sa periods.
+    """
+    mask = (periods >= t_min) & (periods <= t_max)
+    if not np.any(mask):
+        raise ValueError(
+            f"No periods found in [{t_min}, {t_max}] s. "
+            "Check T_min/T_max against the period array range (0.01–10.0 s)."
+        )
+    sa_r = sa_record[mask]
+    sa_t = sa_target[mask]
+    denom = np.sum(sa_r ** 2)
+    if denom < 1e-14:
+        raise ValueError("Record spectrum is essentially zero — cannot compute scale factor.")
+    return float(np.sum(sa_r * sa_t) / denom)
 
 
 def _suite_correction_factor(
@@ -116,12 +146,17 @@ def scale_suite(
     t_max: float,
     t_min_v: float | None,
     t_max_v: float | None,
-    combination_method: str = "geomean",
-    alpha_h: float = 1.0,
-    alpha_v: float = 1.0,
+    combination_method: str = "srss",
+    scaling_method: str = "mse",
+    alpha_h: float = 0.90,
+    alpha_v: float = 0.90,
 ) -> tuple[dict[str, ScalingResult], SuiteScalingMetadata]:
     """
     Two-step amplitude scaling for a suite of ground motion records.
+
+    scaling_method : "logspace" — log-space geometric mean (NZS 1170.5 k1/k2)
+                     "mse"      — linear-space MSE (ASCE 7-22 §16.2 single factor)
+    Both methods produce ONE scalar SF per pair applied to both H1 and H2.
 
     Returns
     -------
@@ -130,7 +165,9 @@ def scale_suite(
     """
     from core.response_spectrum import geometric_mean_spectrum, srss_spectrum
 
-    # ── Step 1: per-record MSE scale factors ──────────────────────────────────
+    _step1_fn = _logspace_scale_factor if scaling_method == "logspace" else _mse_scale_factor
+
+    # ── Step 1: per-record scale factors ──────────────────────────────────────
     sa_combined: dict[str, np.ndarray] = {}
     sf_h_individual: dict[str, float] = {}
 
@@ -144,7 +181,7 @@ def scale_suite(
         else:
             sa_comb = sa_h1.copy()
         sa_combined[rid] = sa_comb
-        sf_h_individual[rid] = _logspace_scale_factor(sa_comb, sa_target_h, periods, t_min, t_max)
+        sf_h_individual[rid] = _step1_fn(sa_comb, sa_target_h, periods, t_min, t_max)
 
     # ── Step 2: suite correction for horizontal ───────────────────────────────
     k_adj_h = _suite_correction_factor(
@@ -160,7 +197,7 @@ def scale_suite(
 
     if spectra_v and sa_target_v is not None and t_min_v is not None and t_max_v is not None:
         for rid, sa_v in spectra_v.items():
-            sf_v_individual[rid] = _logspace_scale_factor(sa_v, sa_target_v, periods, t_min_v, t_max_v)
+            sf_v_individual[rid] = _step1_fn(sa_v, sa_target_v, periods, t_min_v, t_max_v)
 
         k_adj_v = _suite_correction_factor(
             sf_v_individual, spectra_v, sa_target_v,
@@ -193,6 +230,7 @@ def scale_suite(
 
     metadata = SuiteScalingMetadata(
         combination_method=combination_method,
+        scaling_method=scaling_method,
         suite_correction_h=k_adj_h,
         suite_correction_v=k_adj_v,
         alpha_h=alpha_h,

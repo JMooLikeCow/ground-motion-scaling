@@ -114,6 +114,7 @@ if "Excel" in input_mode:
                 "damping": excel_inputs.damping,
                 "code": excel_inputs.code,
                 "combination_method": excel_inputs.combination_method,
+                "scaling_method": "mse",
                 "alpha_h": excel_inputs.alpha_h,
                 "alpha_v": excel_inputs.alpha_v,
             }
@@ -137,18 +138,48 @@ if "Excel" in input_mode:
 # MODE B — Direct browser input
 # ══════════════════════════════════════════════════════════════════════════════
 else:
-    st.markdown("### 1. Upload Ground Motion Files")
-    st.info(
-        "**PEER AT2 format required.** Files must follow the naming convention: "
-        "`RSN123_H1.AT2`, `RSN123_H2.AT2`, `RSN123_V.AT2` (V is optional). "
-        "The prefix before `_H1` / `_H2` / `_V` is used to pair components."
+    st.markdown("### 1. Upload Ground Motion Pairs")
+    st.caption(
+        "Upload H1 and H2 files for each record pair. "
+        "V (vertical) is optional. Each row is one ground motion pair. "
+        "PEER AT2 format, units assumed g."
     )
-    at2_uploads = st.file_uploader(
-        "Drop AT2 files here",
-        type=["AT2", "at2"],
-        accept_multiple_files=True,
-        key="at2_mode_b",
+
+    n_pairs = st.number_input(
+        "Number of ground motion pairs", min_value=1, max_value=30, value=3, step=1,
     )
+
+    # Column headers
+    hdr = st.columns([1.2, 2, 2, 2])
+    hdr[0].markdown("**Record ID**")
+    hdr[1].markdown("**H1 component**")
+    hdr[2].markdown("**H2 component**")
+    hdr[3].markdown("**V component** *(optional)*")
+
+    pair_uploads = []
+    for i in range(int(n_pairs)):
+        c0, c1, c2, c3 = st.columns([1.2, 2, 2, 2])
+        with c0:
+            rid = st.text_input(
+                "ID", value=f"GM{i+1:02d}", key=f"rid_{i}",
+                label_visibility="collapsed",
+            )
+        with c1:
+            h1 = st.file_uploader(
+                f"H1_{i}", type=["AT2", "at2"], key=f"h1_{i}",
+                label_visibility="collapsed",
+            )
+        with c2:
+            h2 = st.file_uploader(
+                f"H2_{i}", type=["AT2", "at2"], key=f"h2_{i}",
+                label_visibility="collapsed",
+            )
+        with c3:
+            v = st.file_uploader(
+                f"V_{i}", type=["AT2", "at2"], key=f"v_{i}",
+                label_visibility="collapsed",
+            )
+        pair_uploads.append({"id": rid.strip(), "H1": h1, "H2": h2, "V": v})
 
     st.markdown("### 2. Target Spectra")
     col_th, col_tv = st.columns(2)
@@ -194,12 +225,41 @@ else:
         code = st.selectbox("Compliance code", code_options)
 
     with col3:
+        scaling_method = st.selectbox(
+            "SF derivation method",
+            ["mse", "logspace"],
+            format_func=lambda x: (
+                "Linear MSE — single factor (ASCE 7-22 §16.2)"
+                if x == "mse" else
+                "Log-space geometric mean (NZS 1170.5)"
+            ),
+        )
+        with st.expander("ℹ️ Which SF derivation method?"):
+            st.markdown("""
+**Linear MSE — single factor (ASCE 7-22 §16.2)**
+
+`SF = Σ(Sa_pair × Sa_target) / Σ(Sa_pair²)`
+
+Minimises the sum of squared residuals between the scaled combined spectrum and the target in linear space. Produces a single scalar applied identically to both H1 and H2 of each pair, consistent with the ASCE 7-22 §16.2 requirement that a single scale factor is applied to both horizontal components. High-Sa periods carry more weight than low-Sa periods in this minimisation.
+
+---
+
+**Log-space geometric mean (NZS 1170.5)**
+
+`SF = exp( mean[ log(Sa_target / Sa_pair) ] )`
+
+Gives equal percentage-error weight at all periods — no bias toward high-Sa regions. Aligned with the NZS 1170.5 k1/k2 framework. Also applies one scalar to both H1 and H2 (the scalar is derived from the combined H1+H2 spectrum). Not explicitly prescribed by ASCE 7-22 but produces more balanced spectral fits.
+
+---
+
+**Practical guidance:** Use **Linear MSE** when strict ASCE 7-22 §16.2 compliance is required. Use **Log-space** when you want equal period weighting or are following NZS 1170.5.
+            """)
         combination_method = st.selectbox(
-            "Horizontal SF method",
+            "Horizontal combination rule",
             ["srss", "geomean"],
             format_func=lambda x: "Geometric Mean (RotD50 proxy)" if x == "geomean" else "SRSS (ASCE 7-22 §16.2.3)",
         )
-        with st.expander("ℹ️ Which method should I use?"):
+        with st.expander("ℹ️ Which combination rule?"):
             st.markdown("""
 **Geometric Mean (RotD50 proxy)** computes the combined spectrum as:
 
@@ -252,6 +312,7 @@ This represents the maximum resultant response across both components simultaneo
         "damping": damping_pct / 100.0,
         "code": code,
         "combination_method": combination_method,
+        "scaling_method": scaling_method,
         "alpha_h": alpha_h_input if use_custom_ah else None,
         "alpha_v": alpha_v_input if use_custom_av else None,
     }
@@ -273,10 +334,6 @@ if not run:
 st.markdown("---")
 st.markdown("## Results")
 
-if not at2_uploads:
-    st.error("No AT2 files uploaded. Please upload at least one H1 file.")
-    st.stop()
-
 if target_h is None:
     st.error("No horizontal target spectrum provided.")
     st.stop()
@@ -287,39 +344,54 @@ if params.get("t_min", 0) >= params.get("t_max", 0):
 
 # ── Parse AT2 files ───────────────────────────────────────────────────────────
 with st.spinner("Parsing AT2 files..."):
-    raw_records: list[GroundMotionRecord] = []
     parse_errors = []
-    for uf in at2_uploads:
-        try:
-            rec = parse_at2(uf.read(), uf.name)
-            raw_records.append(rec)
-        except Exception as e:
-            parse_errors.append(f"{uf.name}: {e}")
+    grouped: dict[str, dict[str, GroundMotionRecord]] = {}
 
-    if parse_errors:
-        for err in parse_errors:
-            st.warning(err)
+    if "Excel" in input_mode:
+        # Mode A: batch upload + manifest mapping
+        if not at2_uploads:
+            st.error("No AT2 files uploaded.")
+            st.stop()
+        raw_records: list[GroundMotionRecord] = []
+        for uf in at2_uploads:
+            try:
+                raw_records.append(parse_at2(uf.read(), uf.name))
+            except Exception as e:
+                parse_errors.append(f"{uf.name}: {e}")
+        if records_manifest:
+            filename_to_rec = {r.filename: r for r in raw_records}
+            for entry in records_manifest:
+                rid = entry["id"]
+                grouped[rid] = {}
+                for comp in ["H1", "H2", "V"]:
+                    fname = entry.get(comp)
+                    if fname and fname in filename_to_rec:
+                        grouped[rid][comp] = filename_to_rec[fname]
+        else:
+            grouped = group_records(raw_records)
+    else:
+        # Mode B: per-pair explicit upload
+        active_pairs = [p for p in pair_uploads if p["id"] and p["H1"] is not None]
+        if not active_pairs:
+            st.error("No ground motion pairs uploaded. Please upload at least one H1 file.")
+            st.stop()
+        for pair in active_pairs:
+            rid = pair["id"]
+            grouped[rid] = {}
+            for comp in ["H1", "H2", "V"]:
+                f = pair[comp]
+                if f is not None:
+                    try:
+                        grouped[rid][comp] = parse_at2(f.read(), f.name)
+                    except Exception as e:
+                        parse_errors.append(f"{rid}/{comp} ({f.name}): {e}")
 
-    if not raw_records:
+    for err in parse_errors:
+        st.warning(err)
+
+    if not grouped:
         st.error("No records could be parsed. Check file format.")
         st.stop()
-
-    # In Mode A, use manifest to assign IDs; in Mode B, auto-group by filename
-    grouped = group_records(raw_records)
-
-    if records_manifest:
-        # Re-map by manifest Record_ID
-        filename_to_rec = {r.filename: r for r in raw_records}
-        grouped_final = {}
-        for entry in records_manifest:
-            rid = entry["id"]
-            grouped_final[rid] = {}
-            for comp in ["H1", "H2", "V"]:
-                fname = entry.get(comp)
-                if fname and fname in filename_to_rec:
-                    rec = filename_to_rec[fname]
-                    grouped_final[rid][comp] = rec
-        grouped = grouped_final
 
 n_records = len(grouped)
 has_vertical = any("V" in g for g in grouped.values())
@@ -388,6 +460,7 @@ with st.spinner("Computing scale factors..."):
             t_min_v=t_min_v_val,
             t_max_v=t_max_v_val,
             combination_method=params["combination_method"],
+            scaling_method=params.get("scaling_method", "mse"),
             alpha_h=alpha_h_scaling,
             alpha_v=alpha_v_scaling,
         )
@@ -396,11 +469,13 @@ with st.spinner("Computing scale factors..."):
         st.stop()
 
     # Show suite correction notice if it was applied
+    method_label = ("Log-space geometric mean" if scaling_metadata.scaling_method == "logspace"
+                    else "Linear MSE")
     if scaling_metadata.suite_correction_h > 1.001:
         st.info(
             f"ℹ️ Suite correction applied (k2 = **{scaling_metadata.suite_correction_h:.4f}**): "
-            f"individual k1 scale factors were multiplied by k2 to bring the suite mean up to "
-            f"α × target (α = {alpha_h_scaling:.2f}) across the full scaling period range."
+            f"{method_label} per-record factors (k1) were multiplied by k2 to bring the suite mean "
+            f"up to α × target (α = {alpha_h_scaling:.2f}) across the full scaling period range."
         )
 
 # ── Compliance ────────────────────────────────────────────────────────────────
@@ -566,6 +641,7 @@ report_md = build_report(
     t_max_v=t_max_v_val,
     damping=params["damping"],
     combination_method=params["combination_method"],
+    scaling_method=params.get("scaling_method", "mse"),
     has_vertical=has_vertical,
 )
 st.markdown(report_md)
