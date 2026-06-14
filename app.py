@@ -490,6 +490,48 @@ for rid, r in scaling_results.items():
     sf_table.append(row)
 st.dataframe(pd.DataFrame(sf_table), use_container_width=True, hide_index=True)
 
+# ── Spectral ratio table ──────────────────────────────────────────────────────
+st.markdown("### Spectral Ratio Table — Sa(scaled) / Sa(target)")
+st.caption(
+    f"Individual and mean ratios at each period within the scaling range "
+    f"[{params['t_min']} – {params['t_max']} s]. "
+    f"Cells below the compliance threshold (α = {alpha_h_scaling:.2f}) are highlighted."
+)
+
+_mask_sr = (PERIOD_ARRAY >= params["t_min"]) & (PERIOD_ARRAY <= params["t_max"])
+_periods_sr = PERIOD_ARRAY[_mask_sr]
+_target_sr = sa_target_h_interp[_mask_sr]
+
+_ratio_data: dict[str, list] = {"Period (s)": [f"{t:.3f}" for t in _periods_sr]}
+for rid, r in scaling_results.items():
+    _sa_rec = r.sa_combined_scaled[_mask_sr]
+    _ratios = np.where(_target_sr > 0, _sa_rec / _target_sr, np.nan)
+    _ratio_data[rid] = [round(float(v), 3) for v in _ratios]
+
+_all_scaled_sr = np.vstack([r.sa_combined_scaled[_mask_sr] for r in scaling_results.values()])
+_mean_sr = np.mean(_all_scaled_sr, axis=0)
+_ratio_data["Suite Mean"] = [round(float(v), 3) for v in np.where(_target_sr > 0, _mean_sr / _target_sr, np.nan)]
+
+_ratio_df = pd.DataFrame(_ratio_data)
+
+def _colour_ratio(val):
+    try:
+        v = float(val)
+        if v < alpha_h_scaling:
+            return "background-color: #FFCCCC; color: black"
+        elif v < 1.0:
+            return "background-color: #FFF3CC; color: black"
+    except (TypeError, ValueError):
+        pass
+    return ""
+
+_numeric_cols = [c for c in _ratio_df.columns if c != "Period (s)"]
+st.dataframe(
+    _ratio_df.style.applymap(_colour_ratio, subset=_numeric_cols),
+    use_container_width=True,
+    hide_index=True,
+)
+
 # ── QA/QC Plots ───────────────────────────────────────────────────────────────
 st.markdown("### QA/QC Plots")
 figures = {}
@@ -540,7 +582,6 @@ report_md = build_report(
     damping=params["damping"],
     combination_method=params["combination_method"],
     has_vertical=has_vertical,
-    periods=PERIOD_ARRAY,
 )
 st.markdown(report_md)
 

@@ -19,7 +19,6 @@ def build_report(
     damping: float,
     combination_method: str,
     has_vertical: bool,
-    periods: np.ndarray,
 ) -> str:
     """Return the full design note as a Markdown string."""
 
@@ -121,17 +120,6 @@ def build_report(
             v_flag = ("Yes" if rr.below_target_v else "No") if rr.below_target_v is not None else "N/A"
             lines.append(f"| {rr.record_id} | {h_flag} | {v_flag} |")
         lines.append("")
-
-    # ── 5. Spectral Statistics ────────────────────────────────────────────────
-    lines.append("## 5. Key Spectral Statistics")
-    all_scaled = np.vstack([r.sa_combined_scaled for r in scaling_results.values()])
-    mean_scaled = np.mean(all_scaled, axis=0)
-    mask = (periods >= t_min) & (periods <= t_max)
-    peak_idx = int(np.argmax(mean_scaled))
-    lines.append(f"- **Peak mean Sa:** {mean_scaled[peak_idx]:.4f} g at T = {periods[peak_idx]:.3f} s")
-    lines.append(f"- **Mean Sa at T_min ({t_min} s):** {np.interp(t_min, periods, mean_scaled):.4f} g")
-    lines.append(f"- **Mean Sa at T_max ({t_max} s):** {np.interp(t_max, periods, mean_scaled):.4f} g")
-    lines.append("")
 
     return "\n".join(lines)
 
