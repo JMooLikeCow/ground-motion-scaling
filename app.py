@@ -196,7 +196,7 @@ else:
     with col3:
         combination_method = st.selectbox(
             "Horizontal SF method",
-            ["geomean", "srss"],
+            ["srss", "geomean"],
             format_func=lambda x: "Geometric Mean (RotD50 proxy)" if x == "geomean" else "SRSS (ASCE 7-22 §16.2.3)",
         )
         with st.expander("ℹ️ Which method should I use?"):
