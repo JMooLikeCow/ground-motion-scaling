@@ -2,6 +2,7 @@
 Ground Motion Scaling Tool
 Streamlit web application — entry point.
 """
+from __future__ import annotations
 
 import io
 import numpy as np
@@ -559,6 +560,14 @@ st.caption(
 )
 sf_table = []
 _use_logspace = scaling_metadata.scaling_method == "logspace"
+
+# ── TEMPORARY DEBUG — remove after confirming ─────────────────────────────────
+st.info(
+    f"DEBUG → scaling_metadata.scaling_method = `{scaling_metadata.scaling_method!r}` | "
+    f"_use_logspace = `{_use_logspace}` | "
+    f"sample sa_h2_unscaled is None: `{next(iter(scaling_results.values())).sa_h2_unscaled is None}`"
+)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _pga(arr):
     return f"{float(np.max(np.abs(arr))):.4f}" if arr is not None else "—"
