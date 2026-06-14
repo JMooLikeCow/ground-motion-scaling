@@ -32,7 +32,8 @@ def build_report(
     lines.append(f"- **Components present:** {comp_label}")
     lines.append("- **Input file format:** PEER AT2 (assumed units: g)")
 
-    lines.append(f"- **Horizontal combination method:** {combination_method.upper()}")
+    _cm_label = "Geometric Mean (RotD50 proxy)" if combination_method == "geomean" else "SRSS (ASCE 7-22 §16.2.3)"
+    lines.append(f"- **Horizontal combination method:** {_cm_label}")
     lines.append("")
 
     # ── 2. Scaling Parameters ─────────────────────────────────────────────────

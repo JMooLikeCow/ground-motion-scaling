@@ -197,15 +197,15 @@ else:
         combination_method = st.selectbox(
             "Horizontal SF method",
             ["geomean", "srss"],
-            format_func=lambda x: "Geometric Mean" if x == "geomean" else "SRSS (ASCE 7-22 §16.2.3)",
+            format_func=lambda x: "Geometric Mean (RotD50 proxy)" if x == "geomean" else "SRSS (ASCE 7-22 §16.2.3)",
         )
         with st.expander("ℹ️ Which method should I use?"):
             st.markdown("""
-**Geometric Mean** computes the combined spectrum as:
+**Geometric Mean (RotD50 proxy)** computes the combined spectrum as:
 
 `Sa_pair(T) = √( Sa_H1(T) × Sa_H2(T) )`
 
-This represents the average energy of the two horizontal components at each period. It is widely used in practice and is the basis of the RotD50 intensity measure, which is the standard output of the PEER NGA database. If your target spectrum is defined in terms of RotD50 (as is the case for most ASCE 7 site-specific spectra and USGS hazard outputs), **Geometric Mean is the appropriate choice** as it is consistent with the definition of the target.
+This is the geometric mean of the two as-recorded horizontal components. It is not identical to RotD50 (which requires computing the response spectrum across all rotation azimuths and taking the 50th percentile), but it is the standard engineering proxy and tracks closely with RotD50 on average. The PEER NGA database reports RotD50, and most ASCE 7 site-specific and USGS hazard spectra are defined on a RotD50 basis — **Geometric Mean is the appropriate choice** when your target is RotD50.
 
 ---
 
