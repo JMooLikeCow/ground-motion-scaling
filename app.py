@@ -552,14 +552,26 @@ st.caption(
     "these are informational only; suite mean compliance governs."
 )
 sf_table = []
+_use_logspace = params.get("scaling_method", "mse") == "logspace"
 for rid, r in scaling_results.items():
-    row = {
-        "Record ID": rid,
-        "Scale Factor (H)": f"{r.sf_h:.4f}",
-        "Scale Factor (V)": f"{r.sf_v:.4f}" if r.sf_v else "—",
-        "Unscaled PGA (g)": f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
-        "Scaled PGA (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
-    }
+    row = {"Record ID": rid}
+    if _use_logspace:
+        row["k1 — H (shape fit)"]    = f"{r.sf_h_k1:.4f}"
+        row["k2 — H (suite corr.)"]  = f"×{r.sf_h_k2:.4f}"
+        row["SF (H) = k1×k2"]        = f"{r.sf_h:.4f}"
+        if r.sf_v is not None:
+            row["k1 — V (shape fit)"]   = f"{r.sf_v_k1:.4f}" if r.sf_v_k1 is not None else "—"
+            row["k2 — V (suite corr.)"] = f"×{r.sf_v_k2:.4f}" if r.sf_v_k2 is not None else "—"
+            row["SF (V) = k1×k2"]       = f"{r.sf_v:.4f}"
+        else:
+            row["k1 — V (shape fit)"]   = "—"
+            row["k2 — V (suite corr.)"] = "—"
+            row["SF (V) = k1×k2"]       = "—"
+    else:
+        row["Scale Factor (H)"] = f"{r.sf_h:.4f}"
+        row["Scale Factor (V)"] = f"{r.sf_v:.4f}" if r.sf_v else "—"
+    row["Unscaled PGA (g)"] = f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—"
+    row["Scaled PGA (g)"]   = f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—"
     sf_table.append(row)
 st.dataframe(pd.DataFrame(sf_table), use_container_width=True, hide_index=True)
 

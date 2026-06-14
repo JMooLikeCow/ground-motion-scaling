@@ -77,11 +77,20 @@ def build_report(
             lines.append(f"- **SF range (vertical):** {min(sf_v_vals):.4f} – {max(sf_v_vals):.4f}")
 
     lines.append("")
-    lines.append("| Record ID | Scale Factor (H) | Scale Factor (V) |")
-    lines.append("|---|---|---|")
-    for rid, r in scaling_results.items():
-        sf_v_str = f"{r.sf_v:.4f}" if r.sf_v is not None else "N/A"
-        lines.append(f"| {rid} | {r.sf_h:.4f} | {sf_v_str} |")
+    if scaling_method == "logspace":
+        lines.append("| Record ID | k1 — H | k2 — H | SF (H) = k1×k2 | k1 — V | k2 — V | SF (V) = k1×k2 |")
+        lines.append("|---|---|---|---|---|---|---|")
+        for rid, r in scaling_results.items():
+            k1v = f"{r.sf_v_k1:.4f}" if r.sf_v_k1 is not None else "N/A"
+            k2v = f"×{r.sf_v_k2:.4f}" if r.sf_v_k2 is not None else "N/A"
+            sfv = f"{r.sf_v:.4f}" if r.sf_v is not None else "N/A"
+            lines.append(f"| {rid} | {r.sf_h_k1:.4f} | ×{r.sf_h_k2:.4f} | {r.sf_h:.4f} | {k1v} | {k2v} | {sfv} |")
+    else:
+        lines.append("| Record ID | Scale Factor (H) | Scale Factor (V) |")
+        lines.append("|---|---|---|")
+        for rid, r in scaling_results.items():
+            sf_v_str = f"{r.sf_v:.4f}" if r.sf_v is not None else "N/A"
+            lines.append(f"| {rid} | {r.sf_h:.4f} | {sf_v_str} |")
     lines.append("")
 
     return "\n".join(lines)

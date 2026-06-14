@@ -21,15 +21,17 @@ from dataclasses import dataclass
 @dataclass
 class ScalingResult:
     record_id: str
-    sf_h: float                          # final horizontal scale factor (after suite correction)
-    sf_v: float | None                   # final vertical scale factor
-    sf_h_k1: float                        # step-1 log-space factor (k1) before suite correction
-    sf_h_k2: float                        # step-2 suite correction factor (k2); 1.0 if no correction needed
+    sf_h: float                           # final horizontal SF (step-1 × step-2)
+    sf_v: float | None                    # final vertical SF
+    sf_h_k1: float                        # step-1 per-record horizontal factor
+    sf_h_k2: float                        # step-2 horizontal suite correction (1.0 if none needed)
+    sf_v_k1: float | None                 # step-1 per-record vertical factor (None if no vertical)
+    sf_v_k2: float | None                 # step-2 vertical suite correction (None if no vertical)
     sa_h1_unscaled: np.ndarray
     sa_h2_unscaled: np.ndarray | None
     sa_v_unscaled: np.ndarray | None
-    sa_combined_unscaled: np.ndarray     # geomean or SRSS of H1/H2, unscaled
-    sa_combined_scaled: np.ndarray       # final scaled combined spectrum
+    sa_combined_unscaled: np.ndarray      # geomean or SRSS of H1/H2, unscaled
+    sa_combined_scaled: np.ndarray        # final scaled combined spectrum
 
 
 @dataclass
@@ -221,6 +223,8 @@ def scale_suite(
             sf_v=sf_v,
             sf_h_k1=sf_h_individual[rid],
             sf_h_k2=k_adj_h,
+            sf_v_k1=sf_v_individual.get(rid),
+            sf_v_k2=k_adj_v,
             sa_h1_unscaled=spectra_h1[rid],
             sa_h2_unscaled=sa_h2,
             sa_v_unscaled=sa_v,
