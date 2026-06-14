@@ -204,12 +204,10 @@ def plot_deviation_ratio(
     fig.add_trace(go.Scatter(
         x=periods, y=np.ones_like(periods), name="Target (ratio = 1.0)",
         line=dict(color="red", width=1.5, dash="solid"),
-        opacity=0.70,
     ))
     fig.add_trace(go.Scatter(
         x=periods, y=np.full_like(periods, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
         line=dict(color="red", width=1.5, dash="dash"),
-        opacity=0.70,
     ))
     _range_band(fig, t_min, t_max)
 
