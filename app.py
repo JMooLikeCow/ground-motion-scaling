@@ -399,8 +399,8 @@ with st.spinner("Computing scale factors..."):
     # Show suite correction notice if it was applied
     if scaling_metadata.suite_correction_h > 1.001:
         st.info(
-            f"ℹ️ Suite correction applied: individual MSE scale factors were multiplied by "
-            f"**{scaling_metadata.suite_correction_h:.4f}** to bring the suite mean up to "
+            f"ℹ️ Suite correction applied (k2 = **{scaling_metadata.suite_correction_h:.4f}**): "
+            f"individual k1 scale factors were multiplied by k2 to bring the suite mean up to "
             f"α × target (α = {alpha_h_scaling:.2f}) across the full scaling period range."
         )
 
@@ -475,9 +475,9 @@ sf_table = []
 for rid, r in scaling_results.items():
     row = {
         "Record ID": rid,
-        "SF (H) — MSE fit": f"{r.sf_h_individual:.4f}",
-        "Suite correction": f"×{r.sf_h_suite_correction:.4f}",
-        "SF (H) — final": f"{r.sf_h:.4f}",
+        "k1 (log-space fit)": f"{r.sf_h_k1:.4f}",
+        "k2 (suite correction)": f"×{r.sf_h_k2:.4f}",
+        "SF (H) = k1 × k2": f"{r.sf_h:.4f}",
         "SF (V) — final":  f"{r.sf_v:.4f}" if r.sf_v else "—",
         "Unscaled PGA H1 (g)": f"{float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",
         "Scaled PGA H1 (g)":   f"{r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))):.4f}" if r.sa_h1_unscaled is not None else "—",

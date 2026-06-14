@@ -1,12 +1,16 @@
 """
-Amplitude scaling via two-step process:
-  Step 1 — per-record MSE minimisation against target over [T_min, T_max]
-  Step 2 — suite correction: uniform upward adjustment to all SFs so that
-            mean(SF_i * Sa_pair_i(T)) >= alpha * target(T) at every T in range.
+Amplitude scaling via two-step process (aligned with NZS 1170.5 k1/k2 framework):
+  Step 1 (k1) — per-record log-space geometric mean scale factor over [T_min, T_max]
+                 k1 = exp( mean[ log(Sa_target(T) / Sa_pair(T)) ] )
+                 Gives equal percentage-error weighting at all periods, unlike linear MSE
+                 which is biased toward high-Sa periods.
+  Step 2 (k2) — suite correction: uniform upward adjustment to all k1 factors so that
+                 mean(k1_i * k2 * Sa_pair_i(T)) >= alpha * target(T) at every T in range.
 
-The correction factor is:
-    k_adj = max over T in [T_min, T_max] of ( alpha * target(T) / mean_scaled(T) )
-Applied only if k_adj > 1 (suite is deficient).
+The suite correction factor is:
+    k2 = max over T in [T_min, T_max] of ( alpha * target(T) / mean_k1_scaled(T) )
+Applied only if k2 > 1 (suite is deficient after Step 1).
+Final SF per record = k1_i * k2.
 """
 from __future__ import annotations
 
@@ -19,8 +23,8 @@ class ScalingResult:
     record_id: str
     sf_h: float                          # final horizontal scale factor (after suite correction)
     sf_v: float | None                   # final vertical scale factor
-    sf_h_individual: float               # step-1 MSE factor before suite correction
-    sf_h_suite_correction: float         # k_adj applied (1.0 if no correction needed)
+    sf_h_k1: float                        # step-1 log-space factor (k1) before suite correction
+    sf_h_k2: float                        # step-2 suite correction factor (k2); 1.0 if no correction needed
     sa_h1_unscaled: np.ndarray
     sa_h2_unscaled: np.ndarray | None
     sa_v_unscaled: np.ndarray | None
@@ -37,7 +41,7 @@ class SuiteScalingMetadata:
     alpha_v: float | None
 
 
-def _mse_scale_factor(
+def _logspace_scale_factor(
     sa_record: np.ndarray,
     sa_target: np.ndarray,
     periods: np.ndarray,
@@ -45,9 +49,13 @@ def _mse_scale_factor(
     t_max: float,
 ) -> float:
     """
-    Closed-form MSE scale factor over [t_min, t_max].
-    SF = sum(Sa_r * Sa_t) / sum(Sa_r^2)
-    Minimises sum of squared residuals between SF*Sa_r and Sa_t.
+    Log-space geometric mean scale factor (k1) over [t_min, t_max].
+    k1 = exp( mean[ log(Sa_target(T) / Sa_record(T)) ] )
+
+    Equivalent to the geometric mean of the target/record ratio at each period.
+    Gives equal percentage-error weight at all periods — unlike linear MSE, which
+    is dominated by the highest-Sa part of the spectrum.
+    Aligned with the NZS 1170.5 k1 definition.
     """
     mask = (periods >= t_min) & (periods <= t_max)
     if not np.any(mask):
@@ -57,10 +65,12 @@ def _mse_scale_factor(
         )
     sa_r = sa_record[mask]
     sa_t = sa_target[mask]
-    denom = np.sum(sa_r ** 2)
-    if denom < 1e-14:
-        raise ValueError("Record spectrum is essentially zero — cannot compute scale factor.")
-    return float(np.sum(sa_r * sa_t) / denom)
+    if np.any(sa_r <= 0):
+        raise ValueError("Record spectrum has zero or negative values — cannot compute log-space scale factor.")
+    if np.any(sa_t <= 0):
+        raise ValueError("Target spectrum has zero or negative values in scaling range.")
+    log_ratios = np.log(sa_t / sa_r)
+    return float(np.exp(np.mean(log_ratios)))
 
 
 def _suite_correction_factor(
@@ -134,7 +144,7 @@ def scale_suite(
         else:
             sa_comb = sa_h1.copy()
         sa_combined[rid] = sa_comb
-        sf_h_individual[rid] = _mse_scale_factor(sa_comb, sa_target_h, periods, t_min, t_max)
+        sf_h_individual[rid] = _logspace_scale_factor(sa_comb, sa_target_h, periods, t_min, t_max)
 
     # ── Step 2: suite correction for horizontal ───────────────────────────────
     k_adj_h = _suite_correction_factor(
@@ -150,7 +160,7 @@ def scale_suite(
 
     if spectra_v and sa_target_v is not None and t_min_v is not None and t_max_v is not None:
         for rid, sa_v in spectra_v.items():
-            sf_v_individual[rid] = _mse_scale_factor(sa_v, sa_target_v, periods, t_min_v, t_max_v)
+            sf_v_individual[rid] = _logspace_scale_factor(sa_v, sa_target_v, periods, t_min_v, t_max_v)
 
         k_adj_v = _suite_correction_factor(
             sf_v_individual, spectra_v, sa_target_v,
@@ -172,8 +182,8 @@ def scale_suite(
             record_id=rid,
             sf_h=sf_h,
             sf_v=sf_v,
-            sf_h_individual=sf_h_individual[rid],
-            sf_h_suite_correction=k_adj_h,
+            sf_h_k1=sf_h_individual[rid],
+            sf_h_k2=k_adj_h,
             sa_h1_unscaled=spectra_h1[rid],
             sa_h2_unscaled=sa_h2,
             sa_v_unscaled=sa_v,

@@ -45,17 +45,17 @@ def build_report(
     lines.append(f"- **Horizontal scaling period range:** T_min = {t_min} s, T_max = {t_max} s")
     if has_vertical and t_min_v is not None:
         lines.append(f"- **Vertical scaling period range:** T_min = {t_min_v} s, T_max = {t_max_v} s")
-    lines.append("- **Scale factor derivation:** Closed-form MSE minimisation over scaling period range")
+    lines.append("- **Scale factor derivation:** Two-step log-space geometric mean (k1) + suite correction (k2), aligned with NZS 1170.5 framework")
     lines.append("")
 
     # ── 3. Scale Factor Results ───────────────────────────────────────────────
     lines.append("## 3. Scale Factor Results")
     sf_h_vals = [r.sf_h for r in scaling_results.values()]
-    sf_h_ind_vals = [r.sf_h_individual for r in scaling_results.values()]
-    k_adj = list(scaling_results.values())[0].sf_h_suite_correction
-    lines.append(f"- **Scaling method:** Step 1 — per-record MSE minimisation; Step 2 — suite correction")
-    lines.append(f"- **Suite correction factor (horizontal):** {k_adj:.4f}" +
-                 (" (no correction required)" if k_adj <= 1.001 else " (applied to all records)"))
+    sf_h_ind_vals = [r.sf_h_k1 for r in scaling_results.values()]
+    k2 = list(scaling_results.values())[0].sf_h_k2
+    lines.append(f"- **Scaling method:** Step 1 — per-record log-space geometric mean (k1); Step 2 — suite correction (k2)")
+    lines.append(f"- **Suite correction factor k2 (horizontal):** {k2:.4f}" +
+                 (" (no correction required)" if k2 <= 1.001 else " (applied to all records)"))
     lines.append(f"- **Final SF range (horizontal):** {min(sf_h_vals):.4f} – {max(sf_h_vals):.4f}")
     lines.append(f"- **Suite mean SF (horizontal):** {np.mean(sf_h_vals):.4f}")
 
@@ -66,11 +66,11 @@ def build_report(
             lines.append(f"- **SF range (vertical):** {min(sf_v_vals):.4f} – {max(sf_v_vals):.4f}")
 
     lines.append("")
-    lines.append("| Record ID | SF MSE fit | Suite correction | SF final (H) | SF final (V) |")
+    lines.append("| Record ID | k1 (log-space fit) | k2 (suite correction) | SF final (H) | SF final (V) |")
     lines.append("|---|---|---|---|---|")
     for rid, r in scaling_results.items():
         sf_v_str = f"{r.sf_v:.4f}" if r.sf_v is not None else "N/A"
-        lines.append(f"| {rid} | {r.sf_h_individual:.4f} | ×{r.sf_h_suite_correction:.4f} | {r.sf_h:.4f} | {sf_v_str} |")
+        lines.append(f"| {rid} | {r.sf_h_k1:.4f} | ×{r.sf_h_k2:.4f} | {r.sf_h:.4f} | {sf_v_str} |")
     lines.append("")
 
     # ── 4. Compliance Results ─────────────────────────────────────────────────
