@@ -33,8 +33,6 @@ def build_report(
     lines.append(f"- **Components present:** {comp_label}")
     lines.append("- **Input file format:** PEER AT2 (assumed units: g)")
 
-    pgas = [r.sf_h * float(np.max(np.abs(r.sa_h1_unscaled))) for r in scaling_results.values()]
-    lines.append(f"- **Unscaled PGA range (H1):** {min(pgas):.4f} g – {max(pgas):.4f} g")
     lines.append(f"- **Horizontal combination method:** {combination_method.upper()}")
     lines.append("")
 

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 
 COLOURS = [
@@ -58,18 +57,18 @@ def _range_band(fig, t_min, t_max, row=None, col=None):
     fig.add_vrect(
         x0=t_min, x1=t_max,
         fillcolor="rgba(200,200,200,0.18)", line_width=0,
-        annotation_text=f"[{t_min}–{t_max}s]",
-        annotation_position="top left",
-        annotation_font=dict(size=9, color="black"),
         **kwargs,
     )
-    # Vertical dashed boundary lines at T_min and T_max
-    for t_val, label in [(t_min, f"T_min={t_min}s"), (t_max, f"T_max={t_max}s")]:
+    # Vertical dashed boundary lines labelled T_min / T_max
+    for t_val, label, pos in [
+        (t_min, "T_min", "top right"),
+        (t_max, "T_max", "top left"),
+    ]:
         fig.add_vline(
             x=t_val,
             line_dash="dash", line_color="rgba(80,80,80,0.55)", line_width=1.2,
             annotation_text=label,
-            annotation_position="top right" if t_val == t_max else "top left",
+            annotation_position=pos,
             annotation_font=dict(size=8, color="black"),
             **kwargs,
         )
@@ -83,6 +82,7 @@ def plot_spectra_overlay(
     sa_target: np.ndarray,
     t_min: float,
     t_max: float,
+    alpha_h: float = 0.90,
     title: str = "Response Spectra — Scaled Suite vs Target (full range)",
 ) -> go.Figure:
     fig = go.Figure()
@@ -102,7 +102,13 @@ def plot_spectra_overlay(
     ))
     fig.add_trace(go.Scatter(
         x=periods, y=sa_target, name="Target Spectrum",
-        line=dict(color="red", width=2, dash="dash"),
+        line=dict(color="red", width=2),
+        opacity=0.70,
+    ))
+    fig.add_trace(go.Scatter(
+        x=periods, y=alpha_h * sa_target, name=f"α × Target (α={alpha_h:.2f})",
+        line=dict(color="red", width=1.5, dash="dash"),
+        opacity=0.70,
     ))
     _range_band(fig, t_min, t_max)
 
@@ -122,6 +128,7 @@ def plot_spectra_overlay_zoomed(
     sa_target: np.ndarray,
     t_min: float,
     t_max: float,
+    alpha_h: float = 0.90,
     title: str = "Response Spectra — Scaled Suite vs Target (period range of interest)",
 ) -> go.Figure:
     """Same as plot 1 but x-axis limited to [T_min, T_max] and y-axis auto-scaled."""
@@ -146,11 +153,17 @@ def plot_spectra_overlay_zoomed(
     ))
     fig.add_trace(go.Scatter(
         x=p_zoom, y=target_zoom, name="Target Spectrum",
-        line=dict(color="red", width=2, dash="dash"),
+        line=dict(color="red", width=2),
+        opacity=0.70,
+    ))
+    fig.add_trace(go.Scatter(
+        x=p_zoom, y=alpha_h * target_zoom, name=f"α × Target (α={alpha_h:.2f})",
+        line=dict(color="red", width=1.5, dash="dash"),
+        opacity=0.70,
     ))
 
-    # Y-axis bounds: 0 to 110% of max visible value
-    all_vals = np.concatenate([all_sa.flatten(), target_zoom])
+    # Y-axis bounds: 0 to 110% of max visible value (include α×target in range)
+    all_vals = np.concatenate([all_sa.flatten(), target_zoom, alpha_h * target_zoom])
     y_max = float(np.max(all_vals)) * 1.10
     y_min = 0.0
 
@@ -160,6 +173,7 @@ def plot_spectra_overlay_zoomed(
         yaxis={**_yaxis(), "range": [y_min, y_max]},
         **_base(),
     )
+    _range_band(fig, t_min, t_max)
     return fig
 
 
@@ -255,77 +269,3 @@ def plot_deviation_ratio_zoomed(
     )
     return fig
 
-
-# ── Plot 5: Time histories ─────────────────────────────────────────────────────
-
-def plot_time_histories(
-    records: dict,
-    scaling_results: dict,
-    selected_id: str,
-) -> go.Figure:
-    if selected_id not in records:
-        return go.Figure()
-
-    group  = records[selected_id]
-    result = scaling_results[selected_id]
-    components = [k for k in ["H1", "H2", "V"] if k in group]
-
-    fig = make_subplots(
-        rows=len(components), cols=1,
-        subplot_titles=[f"{selected_id} — {c}" for c in components],
-        shared_xaxes=True,
-    )
-
-    comp_sf = {"H1": result.sf_h, "H2": result.sf_h, "V": result.sf_v}
-
-    for row, comp in enumerate(components, 1):
-        rec    = group[comp]
-        sf     = comp_sf[comp] or 1.0
-        t      = np.arange(rec.npts) * rec.dt
-        a_raw  = rec.acceleration
-        a_sc   = a_raw * sf
-
-        fig.add_trace(go.Scatter(
-            x=t, y=a_raw,
-            name=f"{comp} — unscaled",
-            line=dict(color="#d62728", width=0.8),
-            legendgroup=f"{comp}_un",
-        ), row=row, col=1)
-
-        fig.add_trace(go.Scatter(
-            x=t, y=a_sc,
-            name=f"{comp} — scaled (SF={sf:.3f})",
-            line=dict(color=COLOURS[row - 1], width=1.2),
-            legendgroup=f"{comp}_sc",
-        ), row=row, col=1)
-
-        pga_raw = float(np.max(np.abs(a_raw)))
-        pga_sc  = float(np.max(np.abs(a_sc)))
-        fig.add_annotation(
-            text=f"PGA unscaled = {pga_raw:.4f} g | PGA scaled = {pga_sc:.4f} g",
-            xref="x domain", yref="y domain",
-            x=0.01, y=0.97, showarrow=False,
-            row=row, col=1,
-            font=dict(size=9, color="black"),
-        )
-
-    fig.update_xaxes(
-        title_text="Time (s)", title_font=dict(color="black"),
-        tickfont=dict(color="black"), linecolor="black",
-        showgrid=True, gridcolor="#e0e0e0",
-        row=len(components), col=1,
-    )
-    fig.update_yaxes(
-        title_text="Acceleration (g)", title_font=dict(color="black"),
-        tickfont=dict(color="black"), linecolor="black",
-        showgrid=True, gridcolor="#e0e0e0",
-    )
-    fig.update_layout(
-        title=dict(
-            text=f"Time Histories — {selected_id}   (grey = unscaled | colour = scaled)",
-            font=dict(color="black"),
-        ),
-        height=280 * len(components),
-        **_base(),
-    )
-    return fig

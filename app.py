@@ -17,7 +17,6 @@ from ui.plots import (
     plot_spectra_overlay_zoomed,
     plot_deviation_ratio,
     plot_deviation_ratio_zoomed,
-    plot_time_histories,
 )
 from ui.report import build_report
 from io_excel.excel_output import build_excel
@@ -500,7 +499,7 @@ code_plot  = compliance_results[0].code
 # Plot 1 — Full-range spectra overlay
 fig1 = plot_spectra_overlay(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"],
+    params["t_min"], params["t_max"], alpha_plot,
 )
 st.plotly_chart(fig1, use_container_width=True)
 figures["spectra_full"] = fig1
@@ -508,7 +507,7 @@ figures["spectra_full"] = fig1
 # Plot 2 — Zoomed spectra overlay (period range of interest)
 fig2 = plot_spectra_overlay_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"],
+    params["t_min"], params["t_max"], alpha_plot,
 )
 st.plotly_chart(fig2, use_container_width=True)
 figures["spectra_zoom"] = fig2
@@ -528,16 +527,6 @@ fig4 = plot_deviation_ratio_zoomed(
 )
 st.plotly_chart(fig4, use_container_width=True)
 figures["deviation_zoom"] = fig4
-
-# Plot 5 — Time histories (one tab per record, all pre-rendered)
-st.markdown("**Time Histories**")
-th_record_ids = list(grouped.keys())
-th_tabs = st.tabs(th_record_ids)
-for tab, rid in zip(th_tabs, th_record_ids):
-    with tab:
-        fig_th = plot_time_histories(grouped, scaling_results, rid)
-        st.plotly_chart(fig_th, use_container_width=True)
-        figures[f"th_{rid}"] = fig_th
 
 # ── Design Note ───────────────────────────────────────────────────────────────
 st.markdown("### Design Note")
