@@ -534,7 +534,13 @@ _sf_method_label = (
     if scaling_metadata.scaling_method == "mse"
     else "Log-space geometric mean (NZS 1170.5)"
 )
-st.caption(f"SF derivation method: **{_sf_method_label}** — one scalar applied to both H1 and H2 of each pair.")
+_sf_method_caption = (
+    "k1 (shape fit) applied independently per record; k2 (suite correction) applied uniformly — "
+    "both H1 and H2 of each pair share the same k1×k2 scalar."
+    if scaling_metadata.scaling_method == "logspace"
+    else "Single scalar applied to both H1 and H2 of each pair."
+)
+st.caption(f"SF derivation method: **{_sf_method_label}** — {_sf_method_caption}")
 for comp in compliance_results:
     h_colour = "green" if comp.suite_pass_h else "red"
     h_status = "PASS" if comp.suite_pass_h else f"FAIL (max deficiency {comp.deficiency_h*100:.1f}% below α×target at T = {comp.worst_period_h:.3f} s)"
