@@ -167,9 +167,10 @@ def plot_spectra_overlay_zoomed(
     y_max = float(np.max(all_vals)) * 1.10
     y_min = 0.0
 
+    x_pad = (t_max - t_min) * 0.05
     fig.update_layout(
         title=dict(text=title, font=dict(color="black")),
-        xaxis={**_xaxis(), "range": [t_min, t_max]},
+        xaxis={**_xaxis(), "range": [t_min - x_pad, t_max + x_pad]},
         yaxis={**_yaxis(), "range": [y_min, y_max]},
         **_base(),
     )
@@ -261,11 +262,13 @@ def plot_deviation_ratio_zoomed(
                       annotation_position="bottom right",
                       annotation_font=dict(color="black"))
 
+    x_pad = (t_max - t_min) * 0.05
     fig.update_layout(
         title=dict(text=title, font=dict(color="black")),
-        xaxis={**_xaxis(), "range": [t_min, t_max]},
+        xaxis={**_xaxis(), "range": [t_min - x_pad, t_max + x_pad]},
         yaxis={**_yaxis("Mean Sa / Target Sa"), "range": [y_min, y_max]},
         **_base(),
     )
+    _range_band(fig, t_min, t_max)
     return fig
 

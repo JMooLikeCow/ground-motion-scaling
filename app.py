@@ -484,9 +484,9 @@ for rid, r in scaling_results.items():
     for comp in compliance_results:
         for rr in comp.record_results:
             if rr.record_id == rid:
-                row[f"{comp.code} H < target?"] = "Yes ⚠" if rr.below_target_h else "No"
+                row[f"{comp.code} H < α·target?"] = "Yes ⚠" if rr.below_target_h else "No"
                 if rr.below_target_v is not None:
-                    row[f"{comp.code} V < target?"] = "Yes ⚠" if rr.below_target_v else "No"
+                    row[f"{comp.code} V < α·target?"] = "Yes ⚠" if rr.below_target_v else "No"
     sf_table.append(row)
 st.dataframe(pd.DataFrame(sf_table), use_container_width=True, hide_index=True)
 

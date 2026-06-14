@@ -110,7 +110,7 @@ def check_compliance(
     record_results = []
     for rid, sa_sc in scaled_combined.items():
         r_h = sa_sc[mask_h] / np.where(target_h_range > 0, target_h_range, np.inf)
-        below_h = bool(np.any(r_h < 1.0))
+        below_h = bool(np.any(r_h < alpha_h))
         record_results.append(RecordCompliance(
             record_id=rid,
             below_target_h=below_h,
@@ -150,7 +150,7 @@ def check_compliance(
         # Per-record vertical flag
         for i, (rid, sa_v_sc) in enumerate(scaled_v.items()):
             r_v = sa_v_sc[mask_v] / np.where(target_v_range > 0, target_v_range, np.inf)
-            record_results[i].below_target_v = bool(np.any(r_v < 1.0))
+            record_results[i].below_target_v = bool(np.any(r_v < alpha_v))
             record_results[i].min_ratio_v = float(np.min(r_v))
 
     return SuiteCompliance(

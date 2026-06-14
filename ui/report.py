@@ -114,7 +114,7 @@ def build_report(
         lines.append("")
         lines.append("**Per-record flags (informational — suite mean governs compliance):**")
         lines.append("")
-        lines.append("| Record ID | H below target? | V below target? |")
+        lines.append("| Record ID | H below α·target? | V below α·target? |")
         lines.append("|---|---|---|")
         for rr in comp.record_results:
             h_flag = "Yes" if rr.below_target_h else "No"
