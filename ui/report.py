@@ -139,4 +139,4 @@ def build_report(
 
 
 def _default_alpha(code: str) -> float:
-    return {"ASCE 7-22": 1.00, "EC8-1": 0.90}.get(code, 1.00)
+    return {"ASCE 7-22": 0.90, "EC8-1": 0.90}.get(code, 0.90)

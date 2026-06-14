@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 
 ALPHA_DEFAULTS = {
-    "ASCE 7-22": 1.00,
+    "ASCE 7-22": 0.90,
     "EC8-1": 0.90,
 }
 

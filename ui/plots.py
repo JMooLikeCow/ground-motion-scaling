@@ -63,6 +63,16 @@ def _range_band(fig, t_min, t_max, row=None, col=None):
         annotation_font=dict(size=9, color="black"),
         **kwargs,
     )
+    # Vertical dashed boundary lines at T_min and T_max
+    for t_val, label in [(t_min, f"T_min={t_min}s"), (t_max, f"T_max={t_max}s")]:
+        fig.add_vline(
+            x=t_val,
+            line_dash="dash", line_color="rgba(80,80,80,0.55)", line_width=1.2,
+            annotation_text=label,
+            annotation_position="top right" if t_val == t_max else "top left",
+            annotation_font=dict(size=8, color="black"),
+            **kwargs,
+        )
 
 
 # ── Plot 1: Full-range spectra overlay ────────────────────────────────────────
@@ -278,7 +288,7 @@ def plot_time_histories(
         fig.add_trace(go.Scatter(
             x=t, y=a_raw,
             name=f"{comp} — unscaled",
-            line=dict(color="#aaaaaa", width=0.8),
+            line=dict(color="#d62728", width=0.8),
             legendgroup=f"{comp}_un",
         ), row=row, col=1)
 

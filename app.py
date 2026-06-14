@@ -228,14 +228,14 @@ This represents the maximum resultant response across both components simultaneo
     st.markdown("#### Spectral Tolerance (α)")
     st.caption(
         "The suite mean spectrum must be ≥ α × target over the scaling range. "
-        "Code defaults: ASCE 7-22 → α = 1.00 | EC8-1 → α = 0.90. "
+        "Code defaults for amplitude scaling: ASCE 7-22 → α = 0.90 | EC8-1 → α = 0.90. "
         "Override only if project-specific criteria apply."
     )
     col_a1, col_a2 = st.columns(2)
     with col_a1:
         use_custom_ah = st.checkbox("Override horizontal α", value=False)
         alpha_h_input = st.number_input(
-            "Horizontal α", value=1.00, min_value=0.50, max_value=1.50, step=0.01, format="%.2f",
+            "Horizontal α", value=0.90, min_value=0.50, max_value=1.50, step=0.01, format="%.2f",
             disabled=not use_custom_ah,
         )
     with col_a2:
@@ -441,7 +441,7 @@ for comp in compliance_results:
     if not comp.alpha_h_is_default:
         st.warning(
             f"⚠️ Custom horizontal tolerance applied (α = {comp.alpha_h:.2f}) for {comp.code}. "
-            f"Code default is α = {ALPHA_DEFAULTS[comp.code]:.2f}. "
+            f"Code default for amplitude scaling is α = {ALPHA_DEFAULTS[comp.code]:.2f}. "
             "Engineer is responsible for confirming suitability."
         )
     if comp.suite_pass_v is not None and not comp.alpha_v_is_default:
@@ -529,12 +529,15 @@ fig4 = plot_deviation_ratio_zoomed(
 st.plotly_chart(fig4, use_container_width=True)
 figures["deviation_zoom"] = fig4
 
-# Plot 5 — Time histories
-st.markdown("**Time Histories — select record:**")
-selected_th = st.selectbox("Record", list(grouped.keys()), key="th_select")
-fig5 = plot_time_histories(grouped, scaling_results, selected_th)
-st.plotly_chart(fig5, use_container_width=True)
-figures[f"th_{selected_th}"] = fig5
+# Plot 5 — Time histories (one tab per record, all pre-rendered)
+st.markdown("**Time Histories**")
+th_record_ids = list(grouped.keys())
+th_tabs = st.tabs(th_record_ids)
+for tab, rid in zip(th_tabs, th_record_ids):
+    with tab:
+        fig_th = plot_time_histories(grouped, scaling_results, rid)
+        st.plotly_chart(fig_th, use_container_width=True)
+        figures[f"th_{rid}"] = fig_th
 
 # ── Design Note ───────────────────────────────────────────────────────────────
 st.markdown("### Design Note")
