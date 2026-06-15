@@ -205,6 +205,7 @@ def plot_deviation_ratio(
     alpha_h: float,
     code: str,
     floor_frac: float | None = None,
+    band: tuple[float, float] | None = None,
     title: str = "Deviation Ratio — Mean / Target (full range)",
 ) -> go.Figure:
     all_sa = np.vstack(list(scaled_spectra.values()))
@@ -222,10 +223,26 @@ def plot_deviation_ratio(
         x=periods, y=np.ones_like(periods), name="Target (ratio = 1.0)",
         line=dict(color="red", width=1.5, dash="solid"),
     ))
-    fig.add_trace(go.Scatter(
-        x=periods, y=np.full_like(periods, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
-        line=dict(color="red", width=1.5, dash="dash"),
-    ))
+    if band is not None:
+        # EC8-2 D.3(8a) band edges
+        for edge, lbl in [(band[0], "lower"), (band[1], "upper")]:
+            fig.add_trace(go.Scatter(
+                x=periods, y=np.full_like(periods, edge),
+                name=f"Band {lbl} ({edge:.2f}) — EC8-2",
+                line=dict(color="red", width=1.5, dash="dash"),
+                opacity=0.70,
+            ))
+        fig.add_trace(go.Scatter(
+            x=periods, y=np.full_like(periods, alpha_h),
+            name=f"Average min ({alpha_h:.2f}) — EC8-2",
+            line=dict(color="orange", width=1.2, dash="dashdot"),
+            opacity=0.70,
+        ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=periods, y=np.full_like(periods, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
+            line=dict(color="red", width=1.5, dash="dash"),
+        ))
     if floor_frac is not None:
         fig.add_trace(go.Scatter(
             x=periods, y=np.full_like(periods, floor_frac),
@@ -255,6 +272,7 @@ def plot_deviation_ratio_zoomed(
     alpha_h: float,
     code: str,
     floor_frac: float | None = None,
+    band: tuple[float, float] | None = None,
     title: str = "Deviation Ratio — Mean / Target (period range of interest)",
 ) -> go.Figure:
     mask = (periods >= t_min) & (periods <= t_max)
@@ -274,6 +292,9 @@ def plot_deviation_ratio_zoomed(
     y_max = max(y_max, 1.05)
     if floor_frac is not None:
         y_min = min(y_min, floor_frac * 0.90)
+    if band is not None:
+        y_min = min(y_min, band[0] * 0.90)
+        y_max = max(y_max, band[1] * 1.05)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -285,11 +306,26 @@ def plot_deviation_ratio_zoomed(
         line=dict(color="red", width=1.5, dash="solid"),
         opacity=0.70,
     ))
-    fig.add_trace(go.Scatter(
-        x=p_zoom, y=np.full_like(p_zoom, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
-        line=dict(color="red", width=1.5, dash="dash"),
-        opacity=0.70,
-    ))
+    if band is not None:
+        for edge, lbl in [(band[0], "lower"), (band[1], "upper")]:
+            fig.add_trace(go.Scatter(
+                x=p_zoom, y=np.full_like(p_zoom, edge),
+                name=f"Band {lbl} ({edge:.2f}) — EC8-2",
+                line=dict(color="red", width=1.5, dash="dash"),
+                opacity=0.70,
+            ))
+        fig.add_trace(go.Scatter(
+            x=p_zoom, y=np.full_like(p_zoom, alpha_h),
+            name=f"Average min ({alpha_h:.2f}) — EC8-2",
+            line=dict(color="orange", width=1.2, dash="dashdot"),
+            opacity=0.70,
+        ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=p_zoom, y=np.full_like(p_zoom, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
+            line=dict(color="red", width=1.5, dash="dash"),
+            opacity=0.70,
+        ))
     if floor_frac is not None:
         fig.add_trace(go.Scatter(
             x=p_zoom, y=np.full_like(p_zoom, floor_frac),

@@ -49,6 +49,14 @@ def build_report(
     else:
         _method_desc = "Linear MSE — single scale factor per pair (ASCE 7-22 §16.2)"
     lines.append(f"- **Scale factor derivation:** {_method_desc}")
+    _ec8 = next((c for c in compliance_results if getattr(c, "band_lower", None) is not None), None)
+    if _ec8 is not None:
+        lines.append(
+            f"- **EC8-2 (Annex D, D.3(8)) acceptance criteria:** "
+            f"(8a) suite-average ratio within band [{_ec8.band_lower:.2f}, {_ec8.band_upper:.2f}] "
+            f"at every period AND average over range > {_ec8.avg_min:.2f}; "
+            f"(8b) each individual record ≥ {_ec8.individual_floor*100:.0f}% of target over the range."
+        )
     lines.append("")
 
     # ── 3. Scale Factor Results ───────────────────────────────────────────────

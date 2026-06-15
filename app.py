@@ -551,29 +551,58 @@ _sf_method_caption = (
     else "Single scalar applied to both H1 and H2 of each pair."
 )
 st.caption(f"SF derivation method: **{_sf_method_label}** — {_sf_method_caption}")
+def _pf(flag):
+    return ("green", "PASS") if flag else ("red", "FAIL")
+
 for comp in compliance_results:
-    h_colour = "green" if comp.suite_pass_h else "red"
-    h_status = "PASS" if comp.suite_pass_h else f"FAIL (max deficiency {comp.deficiency_h*100:.1f}% below α×target at T = {comp.worst_period_h:.3f} s)"
-    st.markdown(f"**{comp.code} horizontal suite (α = {comp.alpha_h:.2f}):** :{h_colour}[{h_status}]")
-    if comp.suite_pass_v is not None:
-        v_colour = "green" if comp.suite_pass_v else "red"
-        v_status = "PASS" if comp.suite_pass_v else f"FAIL (max deficiency {comp.deficiency_v*100:.1f}% below α×target at T = {comp.worst_period_v:.3f} s)"
-        st.markdown(f"**{comp.code} vertical suite (α = {comp.alpha_v:.2f}):** :{v_colour}[{v_status}]")
-    # EC8-2 second criterion: individual-record floor (>= 50% of target)
-    if comp.individual_floor is not None:
-        f_colour = "green" if comp.floor_pass else "red"
+    if comp.band_lower is not None:
+        # ── EC8-2 Annex D D.3(8) — three concurrent criteria ──────────────────
+        st.markdown(f"**{comp.code} — Eurocode 8 (2nd gen) Annex D, D.3(8):**")
+        # (8a) band: suite-average ratio within [lower, upper] at every period
+        c, s = _pf(comp.band_pass_h)
+        band_msg = (
+            f"D.3(8a) band — suite-average ratio within "
+            f"[{comp.band_lower:.2f}–{comp.band_upper:.2f}] at all periods: :{c}[{s}]"
+        )
+        if not comp.band_pass_h:
+            band_msg += f"  _(worst at T = {comp.worst_period_h:.3f} s)_"
+        st.markdown(band_msg)
+        # (8a) average: mean ratio over range > avg_min
+        c, s = _pf(comp.avg_pass_h)
+        st.markdown(
+            f"D.3(8a) average — mean ratio over range > {comp.avg_min:.2f}: "
+            f":{c}[{s}] _(average = {comp.avg_ratio_h:.3f})_"
+        )
+        # (8b) individual floor
+        c, s = _pf(comp.floor_pass)
         if comp.floor_pass:
-            f_status = f"PASS (worst record min ratio = {comp.worst_floor_ratio:.2f} ≥ {comp.individual_floor:.2f})"
+            floor_detail = f"worst record min ratio = {comp.worst_floor_ratio:.2f} ≥ {comp.individual_floor:.2f}"
         else:
-            f_status = (
-                f"FAIL — {len(comp.floor_violations)} record(s) below "
-                f"{comp.individual_floor*100:.0f}% of target: {', '.join(comp.floor_violations)} "
-                f"(worst min ratio = {comp.worst_floor_ratio:.2f})"
+            floor_detail = (
+                f"{len(comp.floor_violations)} record(s) below {comp.individual_floor*100:.0f}% of target: "
+                f"{', '.join(comp.floor_violations)} (worst = {comp.worst_floor_ratio:.2f})"
             )
         st.markdown(
-            f"**{comp.code} individual-record floor (≥ {comp.individual_floor*100:.0f}% target):** "
-            f":{f_colour}[{f_status}]"
+            f"D.3(8b) individual floor — each record ≥ {comp.individual_floor*100:.0f}% of target: "
+            f":{c}[{s}] _({floor_detail})_"
         )
+        # Vertical (if present)
+        if comp.suite_pass_v is not None:
+            cb, sb = _pf(comp.band_pass_v)
+            ca, sa_ = _pf(comp.avg_pass_v)
+            st.markdown(
+                f"Vertical — band [{comp.band_lower:.2f}–{comp.band_upper:.2f}]: :{cb}[{sb}] · "
+                f"average > {comp.avg_min:.2f}: :{ca}[{sa_}] _(avg = {comp.avg_ratio_v:.3f})_"
+            )
+    else:
+        # ── ASCE 7-22 — single alpha floor ────────────────────────────────────
+        c, s = _pf(comp.suite_pass_h)
+        h_status = s if comp.suite_pass_h else f"FAIL (max deficiency {comp.deficiency_h*100:.1f}% below α×target at T = {comp.worst_period_h:.3f} s)"
+        st.markdown(f"**{comp.code} horizontal suite (α = {comp.alpha_h:.2f}):** :{c}[{h_status}]")
+        if comp.suite_pass_v is not None:
+            cv, sv = _pf(comp.suite_pass_v)
+            v_status = sv if comp.suite_pass_v else f"FAIL (max deficiency {comp.deficiency_v*100:.1f}% below α×target at T = {comp.worst_period_v:.3f} s)"
+            st.markdown(f"**{comp.code} vertical suite (α = {comp.alpha_v:.2f}):** :{cv}[{v_status}]")
 
 # ── Scale factors table ───────────────────────────────────────────────────────
 st.markdown("### Scale Factors")
@@ -692,6 +721,9 @@ alpha_plot = compliance_results[0].alpha_h
 code_plot  = compliance_results[0].code
 # Floor line shown when any checked code defines an individual-record floor (EC8-2 → 0.50)
 floor_plot = next((c.individual_floor for c in compliance_results if c.individual_floor is not None), None)
+# Band edges (EC8-2 → 0.75/1.30) shown on the deviation-ratio plots
+_band_comp = next((c for c in compliance_results if c.band_lower is not None), None)
+band_plot = (_band_comp.band_lower, _band_comp.band_upper) if _band_comp else None
 
 st.plotly_chart(plot_spectra_overlay(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
@@ -705,12 +737,12 @@ st.plotly_chart(plot_spectra_overlay_zoomed(
 
 st.plotly_chart(plot_deviation_ratio(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot,
+    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot, band=band_plot,
 ), use_container_width=True)
 
 st.plotly_chart(plot_deviation_ratio_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot,
+    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot, band=band_plot,
 ), use_container_width=True)
 
 # ── Design Note ───────────────────────────────────────────────────────────────

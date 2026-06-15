@@ -1,10 +1,12 @@
 """
 Code compliance checks for ASCE 7-22 and EC8-2 (Eurocode 8, 2nd generation).
-Pass/fail is determined by: mean(scaled spectra) >= alpha * target
-where alpha is user-controllable (default per code).
 
-EC8-2 (Annex D) adds a second criterion: no individual record's combined scaled
-spectrum may fall below 50% of the target over the period range of interest.
+ASCE 7-22: mean(scaled spectra) >= alpha * target at every period in range.
+
+EC8-2 Annex D, D.3(8) (both must hold concurrently over the period range):
+  (8a) the ratio of the suite-average spectrum to the target lies within the
+       band [0.75, 1.30] at every period AND its average over the range > 0.95;
+  (8b) each individual record's spectrum does not fall below 50% of the target.
 """
 from __future__ import annotations
 
@@ -24,9 +26,19 @@ MIN_RECORDS = {
 
 # Per-code individual-record floor: no single record's combined scaled spectrum
 # may fall below this fraction of the target over the period range of interest.
-# EC8 2nd generation (Annex D) requires each record >= 50% of target.
+# EC8-2 Annex D, D.3(8)b: each accelerogram >= 50% of target.
 INDIVIDUAL_FLOOR = {
     "EC8-2": 0.50,
+}
+
+# EC8-2 Annex D, D.3(8)a: the ratio of the suite-average spectrum to the target
+# must lie within this band at EVERY period in the range, AND its average value
+# over the range must exceed CODE_AVG_MIN. (lower, upper) band:
+CODE_BAND = {
+    "EC8-2": (0.75, 1.30),
+}
+CODE_AVG_MIN = {
+    "EC8-2": 0.95,
 }
 
 
@@ -62,12 +74,24 @@ class SuiteCompliance:
     n_records: int
     min_records_warning: bool
 
-    # Individual-record floor criterion (EC8-2 Annex D): each record's combined
-    # scaled spectrum must stay >= individual_floor * target over the range.
+    # Individual-record floor criterion (EC8-2 Annex D D.3(8)b): each record's
+    # combined scaled spectrum must stay >= individual_floor * target over the range.
     individual_floor: float | None = None      # e.g. 0.50, or None if code has no floor
     floor_pass: bool | None = None             # True/False, or None if no floor applies
     floor_violations: list[str] = field(default_factory=list)  # record IDs breaching the floor
     worst_floor_ratio: float | None = None     # min(Sa_record/target) across all records & periods
+
+    # EC8-2 Annex D D.3(8)a band + average criteria on the suite-average ratio.
+    # None for codes without a band (e.g. ASCE 7-22).
+    band_lower: float | None = None            # e.g. 0.75
+    band_upper: float | None = None            # e.g. 1.30
+    avg_min: float | None = None               # e.g. 0.95 (minimum average ratio)
+    band_pass_h: bool | None = None            # ratio within [lower, upper] at every period
+    avg_ratio_h: float | None = None           # average of (mean/target) over the range
+    avg_pass_h: bool | None = None             # avg_ratio_h > avg_min
+    band_pass_v: bool | None = None
+    avg_ratio_v: float | None = None
+    avg_pass_v: bool | None = None
 
 
 def check_compliance(
@@ -118,10 +142,29 @@ def check_compliance(
             np.vstack(list(scaled_combined.values())), axis=0
         ) / sa_target_h, np.inf)
 
-    deficiency_h = max(0.0, float(np.max(alpha_h - ratio_h_range)))
+    # Band + average criteria (EC8-2) vs simple alpha floor (other codes)
+    band = CODE_BAND.get(code)
+    avg_min = CODE_AVG_MIN.get(code)
+    finite_ratio_h = ratio_h_range[np.isfinite(ratio_h_range)]
+    avg_ratio_h = float(np.mean(finite_ratio_h)) if finite_ratio_h.size else float("nan")
     worst_idx_h = int(np.argmin(ratio_h_range))
     worst_period_h = float(periods_h[worst_idx_h])
-    suite_pass_h = bool(np.all(ratio_h_range >= alpha_h))
+
+    if band is not None:
+        band_lower, band_upper = band
+        within_band_h = (ratio_h_range >= band_lower) & (ratio_h_range <= band_upper)
+        band_pass_h = bool(np.all(within_band_h))
+        avg_pass_h = bool(avg_ratio_h > avg_min) if avg_min is not None else None
+        # Deficiency measured against the lower band edge (how far below 0.75)
+        deficiency_h = max(0.0, float(np.max(band_lower - ratio_h_range)))
+        # D.3(8)a is satisfied only if both band and average conditions hold
+        suite_pass_h = band_pass_h and (avg_pass_h if avg_pass_h is not None else True)
+    else:
+        band_lower = band_upper = None
+        band_pass_h = None
+        avg_pass_h = None
+        deficiency_h = max(0.0, float(np.max(alpha_h - ratio_h_range)))
+        suite_pass_h = bool(np.all(ratio_h_range >= alpha_h))
 
     # Individual-record floor criterion (EC8-2 Annex D): each record's combined
     # scaled spectrum must remain >= floor * target across the range.
@@ -154,6 +197,9 @@ def check_compliance(
     deficiency_v = None
     worst_period_v = None
     mean_ratio_v = None
+    band_pass_v = None
+    avg_ratio_v = None
+    avg_pass_v = None
 
     if scaled_v and sa_target_v is not None and t_min_v is not None and t_max_v is not None:
         mask_v = (periods >= t_min_v) & (periods <= t_max_v)
@@ -172,10 +218,20 @@ def check_compliance(
                 np.inf,
             )
 
-        deficiency_v = max(0.0, float(np.max(alpha_v - ratio_v_range)))
+        finite_ratio_v = ratio_v_range[np.isfinite(ratio_v_range)]
+        avg_ratio_v = float(np.mean(finite_ratio_v)) if finite_ratio_v.size else float("nan")
         worst_idx_v = int(np.argmin(ratio_v_range))
         worst_period_v = float(periods_v[worst_idx_v])
-        suite_pass_v = bool(np.all(ratio_v_range >= alpha_v))
+
+        if band is not None:
+            within_band_v = (ratio_v_range >= band_lower) & (ratio_v_range <= band_upper)
+            band_pass_v = bool(np.all(within_band_v))
+            avg_pass_v = bool(avg_ratio_v > avg_min) if avg_min is not None else None
+            deficiency_v = max(0.0, float(np.max(band_lower - ratio_v_range)))
+            suite_pass_v = band_pass_v and (avg_pass_v if avg_pass_v is not None else True)
+        else:
+            deficiency_v = max(0.0, float(np.max(alpha_v - ratio_v_range)))
+            suite_pass_v = bool(np.all(ratio_v_range >= alpha_v))
 
         # Per-record vertical flag
         for i, (rid, sa_v_sc) in enumerate(scaled_v.items()):
@@ -204,4 +260,13 @@ def check_compliance(
         floor_pass=floor_pass,
         floor_violations=floor_violations,
         worst_floor_ratio=worst_floor_ratio,
+        band_lower=band_lower,
+        band_upper=band_upper,
+        avg_min=avg_min,
+        band_pass_h=band_pass_h,
+        avg_ratio_h=avg_ratio_h,
+        avg_pass_h=avg_pass_h,
+        band_pass_v=band_pass_v,
+        avg_ratio_v=avg_ratio_v,
+        avg_pass_v=avg_pass_v,
     )
