@@ -83,6 +83,7 @@ def plot_spectra_overlay(
     t_min: float,
     t_max: float,
     alpha_h: float = 0.90,
+    floor_frac: float | None = None,
     title: str = "Response Spectra — Scaled Suite vs Target (full range)",
 ) -> go.Figure:
     fig = go.Figure()
@@ -110,6 +111,13 @@ def plot_spectra_overlay(
         line=dict(color="red", width=1.5, dash="dash"),
         opacity=0.70,
     ))
+    if floor_frac is not None:
+        fig.add_trace(go.Scatter(
+            x=periods, y=floor_frac * sa_target,
+            name=f"{floor_frac*100:.0f}% Target floor (EC8-2)",
+            line=dict(color="red", width=1, dash="dot"),
+            opacity=0.60,
+        ))
     _range_band(fig, t_min, t_max)
 
     fig.update_layout(
@@ -129,6 +137,7 @@ def plot_spectra_overlay_zoomed(
     t_min: float,
     t_max: float,
     alpha_h: float = 0.90,
+    floor_frac: float | None = None,
     title: str = "Response Spectra — Scaled Suite vs Target (period range of interest)",
 ) -> go.Figure:
     """Same as plot 1 but x-axis limited to [T_min, T_max] and y-axis auto-scaled."""
@@ -161,6 +170,13 @@ def plot_spectra_overlay_zoomed(
         line=dict(color="red", width=1.5, dash="dash"),
         opacity=0.70,
     ))
+    if floor_frac is not None:
+        fig.add_trace(go.Scatter(
+            x=p_zoom, y=floor_frac * target_zoom,
+            name=f"{floor_frac*100:.0f}% Target floor (EC8-2)",
+            line=dict(color="red", width=1, dash="dot"),
+            opacity=0.60,
+        ))
 
     # Y-axis bounds: 0 to 110% of max visible value (include α×target in range)
     all_vals = np.concatenate([all_sa.flatten(), target_zoom, alpha_h * target_zoom])
@@ -188,6 +204,7 @@ def plot_deviation_ratio(
     t_max: float,
     alpha_h: float,
     code: str,
+    floor_frac: float | None = None,
     title: str = "Deviation Ratio — Mean / Target (full range)",
 ) -> go.Figure:
     all_sa = np.vstack(list(scaled_spectra.values()))
@@ -209,6 +226,13 @@ def plot_deviation_ratio(
         x=periods, y=np.full_like(periods, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
         line=dict(color="red", width=1.5, dash="dash"),
     ))
+    if floor_frac is not None:
+        fig.add_trace(go.Scatter(
+            x=periods, y=np.full_like(periods, floor_frac),
+            name=f"{floor_frac*100:.0f}% Target floor (EC8-2)",
+            line=dict(color="red", width=1, dash="dot"),
+            opacity=0.60,
+        ))
     _range_band(fig, t_min, t_max)
 
     fig.update_layout(
@@ -230,6 +254,7 @@ def plot_deviation_ratio_zoomed(
     t_max: float,
     alpha_h: float,
     code: str,
+    floor_frac: float | None = None,
     title: str = "Deviation Ratio — Mean / Target (period range of interest)",
 ) -> go.Figure:
     mask = (periods >= t_min) & (periods <= t_max)
@@ -247,6 +272,8 @@ def plot_deviation_ratio_zoomed(
     # Ensure alpha and 1.0 are always visible
     y_min = min(y_min, alpha_h * 0.90)
     y_max = max(y_max, 1.05)
+    if floor_frac is not None:
+        y_min = min(y_min, floor_frac * 0.90)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -263,6 +290,13 @@ def plot_deviation_ratio_zoomed(
         line=dict(color="red", width=1.5, dash="dash"),
         opacity=0.70,
     ))
+    if floor_frac is not None:
+        fig.add_trace(go.Scatter(
+            x=p_zoom, y=np.full_like(p_zoom, floor_frac),
+            name=f"{floor_frac*100:.0f}% Target floor (EC8-2)",
+            line=dict(color="red", width=1, dash="dot"),
+            opacity=0.60,
+        ))
 
     x_pad = (t_max - t_min) * 0.05
     fig.update_layout(

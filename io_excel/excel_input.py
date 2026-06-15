@@ -128,9 +128,9 @@ def create_input_template() -> bytes:
             ["T_min_V", "", "Lower bound of vertical scaling period range (s) — leave blank if no vertical"],
             ["T_max_V", "", "Upper bound of vertical scaling period range (s) — leave blank if no vertical"],
             ["Damping_pct", 5.0, "Viscous damping ratio (%) — typically 5"],
-            ["Code", "ASCE 7-22", "Compliance code: 'ASCE 7-22' or 'EC8-1' or 'Both'"],
+            ["Code", "ASCE 7-22", "Compliance code: 'ASCE 7-22' or 'EC8-2' or 'Both'"],
             ["SF_Method", "geomean", "Horizontal combination: 'geomean' or 'srss'"],
-            ["Alpha_H", "", "Horizontal spectral tolerance (leave blank for code default: ASCE=1.00, EC8=0.90)"],
+            ["Alpha_H", "", "Horizontal spectral tolerance (leave blank for code default: ASCE=0.90, EC8-2=0.95)"],
             ["Alpha_V", "", "Vertical spectral tolerance (leave blank for code default)"],
         ], columns=["Parameter", "Value", "Notes"])
         params.to_excel(writer, sheet_name="PARAMETERS", index=False)

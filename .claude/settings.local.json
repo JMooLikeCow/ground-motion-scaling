@@ -5,7 +5,11 @@
       "Bash(python -c \"import streamlit, numpy, scipy, pandas, plotly, openpyxl; print\\('all imports ok'\\)\")",
       "Bash(conda list *)",
       "Bash(python -c \"import numpy, scipy, pandas, plotly, openpyxl; print\\('core imports ok'\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(/Users/jmoo/opt/anaconda3/bin/conda install *)"
     ]
   }
 }

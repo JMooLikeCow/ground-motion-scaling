@@ -1,7 +1,10 @@
 """
-Code compliance checks for ASCE 7-22 and EC8-1.
+Code compliance checks for ASCE 7-22 and EC8-2 (Eurocode 8, 2nd generation).
 Pass/fail is determined by: mean(scaled spectra) >= alpha * target
 where alpha is user-controllable (default per code).
+
+EC8-2 (Annex D) adds a second criterion: no individual record's combined scaled
+spectrum may fall below 50% of the target over the period range of interest.
 """
 from __future__ import annotations
 
@@ -11,12 +14,19 @@ from dataclasses import dataclass, field
 
 ALPHA_DEFAULTS = {
     "ASCE 7-22": 0.90,
-    "EC8-1": 0.90,
+    "EC8-2": 0.95,
 }
 
 MIN_RECORDS = {
     "ASCE 7-22": 11,
-    "EC8-1": 3,
+    "EC8-2": 3,
+}
+
+# Per-code individual-record floor: no single record's combined scaled spectrum
+# may fall below this fraction of the target over the period range of interest.
+# EC8 2nd generation (Annex D) requires each record >= 50% of target.
+INDIVIDUAL_FLOOR = {
+    "EC8-2": 0.50,
 }
 
 
@@ -51,6 +61,13 @@ class SuiteCompliance:
     record_results: list[RecordCompliance]
     n_records: int
     min_records_warning: bool
+
+    # Individual-record floor criterion (EC8-2 Annex D): each record's combined
+    # scaled spectrum must stay >= individual_floor * target over the range.
+    individual_floor: float | None = None      # e.g. 0.50, or None if code has no floor
+    floor_pass: bool | None = None             # True/False, or None if no floor applies
+    floor_violations: list[str] = field(default_factory=list)  # record IDs breaching the floor
+    worst_floor_ratio: float | None = None     # min(Sa_record/target) across all records & periods
 
 
 def check_compliance(
@@ -106,18 +123,31 @@ def check_compliance(
     worst_period_h = float(periods_h[worst_idx_h])
     suite_pass_h = bool(np.all(ratio_h_range >= alpha_h))
 
+    # Individual-record floor criterion (EC8-2 Annex D): each record's combined
+    # scaled spectrum must remain >= floor * target across the range.
+    individual_floor = INDIVIDUAL_FLOOR.get(code)
+    floor_violations: list[str] = []
+    worst_floor_ratio: float | None = None
+
     # Per-record horizontal flags
     record_results = []
     for rid, sa_sc in scaled_combined.items():
         r_h = sa_sc[mask_h] / np.where(target_h_range > 0, target_h_range, np.inf)
         below_h = bool(np.any(r_h < alpha_h))
+        rec_min_ratio = float(np.min(r_h))
         record_results.append(RecordCompliance(
             record_id=rid,
             below_target_h=below_h,
             below_target_v=None,
-            min_ratio_h=float(np.min(r_h)),
+            min_ratio_h=rec_min_ratio,
             min_ratio_v=None,
         ))
+        if individual_floor is not None:
+            worst_floor_ratio = rec_min_ratio if worst_floor_ratio is None else min(worst_floor_ratio, rec_min_ratio)
+            if rec_min_ratio < individual_floor:
+                floor_violations.append(rid)
+
+    floor_pass = None if individual_floor is None else (len(floor_violations) == 0)
 
     # Vertical compliance
     suite_pass_v = None
@@ -170,4 +200,8 @@ def check_compliance(
         record_results=record_results,
         n_records=n_records,
         min_records_warning=min_records_warning,
+        individual_floor=individual_floor,
+        floor_pass=floor_pass,
+        floor_violations=floor_violations,
+        worst_floor_ratio=worst_floor_ratio,
     )

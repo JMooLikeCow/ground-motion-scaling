@@ -42,7 +42,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Ground Motion Scaling Tool")
-st.caption("Amplitude scaling for nonlinear response history analysis | ASCE 7-22 & EC8-1")
+st.caption("Amplitude scaling for nonlinear response history analysis | ASCE 7-22 & EC8-2 (2nd gen)")
 
 # ── Input Mode Selection ───────────────────────────────────────────────────────
 st.markdown("---")
@@ -222,8 +222,12 @@ else:
         t_min_v = st.number_input("T_min — vertical (s)", value=0.10, min_value=0.01, step=0.05, format="%.2f",
                                    help="Only used if vertical records are uploaded.")
         t_max_v = st.number_input("T_max — vertical (s)", value=1.50, min_value=0.05, step=0.10, format="%.2f")
-        code_options = ["ASCE 7-22", "EC8-1", "Both"]
-        code = st.selectbox("Compliance code", code_options)
+        code_options = ["ASCE 7-22", "EC8-2", "Both"]
+        code = st.selectbox(
+            "Compliance code", code_options,
+            help="EC8-2 = Eurocode 8 second generation (Annex D): α = 0.95 and an additional "
+                 "criterion that no individual record may fall below 50% of the target over the range.",
+        )
 
     with col3:
         scaling_method = st.selectbox(
@@ -285,23 +289,27 @@ This represents the maximum resultant response across both components simultaneo
             """)
 
 
+    _alpha_default = 0.95 if code == "EC8-2" else 0.90
     st.markdown("#### Spectral Tolerance (α)")
     st.caption(
         "The suite mean spectrum must be ≥ α × target over the scaling range. "
-        "Code defaults for amplitude scaling: ASCE 7-22 → α = 0.90 | EC8-1 → α = 0.90. "
-        "Override only if project-specific criteria apply."
+        "Code defaults for amplitude scaling: ASCE 7-22 → α = 0.90 | EC8-2 → α = 0.95. "
+        + ("**EC8-2 (Annex D)** additionally requires that no individual record falls below "
+           "50% of the target over the period range of interest. "
+           if code in ("EC8-2", "Both") else "")
+        + "Override only if project-specific criteria apply."
     )
     col_a1, col_a2 = st.columns(2)
     with col_a1:
         use_custom_ah = st.checkbox("Override horizontal α", value=False)
         alpha_h_input = st.number_input(
-            "Horizontal α", value=0.90, min_value=0.50, max_value=1.50, step=0.01, format="%.2f",
+            "Horizontal α", value=_alpha_default, min_value=0.50, max_value=1.50, step=0.01, format="%.2f",
             disabled=not use_custom_ah,
         )
     with col_a2:
         use_custom_av = st.checkbox("Override vertical α", value=False)
         alpha_v_input = st.number_input(
-            "Vertical α", value=0.90, min_value=0.50, max_value=1.50, step=0.01, format="%.2f",
+            "Vertical α", value=_alpha_default, min_value=0.50, max_value=1.50, step=0.01, format="%.2f",
             disabled=not use_custom_av,
         )
 
@@ -442,7 +450,7 @@ with st.spinner("Computing scale factors..."):
     t_max_v_val = params["t_max_v"] if has_vertical and sa_target_v_interp is not None else None
 
     # Resolve alpha values: use user override if provided, else use code default
-    codes_to_check = ["ASCE 7-22", "EC8-1"] if params["code"] == "Both" else [params["code"]]
+    codes_to_check = ["ASCE 7-22", "EC8-2"] if params["code"] == "Both" else [params["code"]]
     # For scaling, use the first selected code's alpha as the suite correction target
     primary_code = codes_to_check[0]
     alpha_h_scaling = params["alpha_h"] if params["alpha_h"] is not None else ALPHA_DEFAULTS[primary_code]
@@ -525,7 +533,8 @@ for comp in compliance_results:
             f"Code default is α = {ALPHA_DEFAULTS[comp.code]:.2f}."
         )
     if comp.min_records_warning:
-        min_r = {"ASCE 7-22": 11, "EC8-1": 3}[comp.code]
+        from core.compliance import MIN_RECORDS
+        min_r = MIN_RECORDS[comp.code]
         st.warning(f"⚠️ {n_records} record sets uploaded. {comp.code} recommends ≥ {min_r} records.")
 
 # ── Suite compliance status ───────────────────────────────────────────────────
@@ -550,6 +559,21 @@ for comp in compliance_results:
         v_colour = "green" if comp.suite_pass_v else "red"
         v_status = "PASS" if comp.suite_pass_v else f"FAIL (max deficiency {comp.deficiency_v*100:.1f}% below α×target at T = {comp.worst_period_v:.3f} s)"
         st.markdown(f"**{comp.code} vertical suite (α = {comp.alpha_v:.2f}):** :{v_colour}[{v_status}]")
+    # EC8-2 second criterion: individual-record floor (>= 50% of target)
+    if comp.individual_floor is not None:
+        f_colour = "green" if comp.floor_pass else "red"
+        if comp.floor_pass:
+            f_status = f"PASS (worst record min ratio = {comp.worst_floor_ratio:.2f} ≥ {comp.individual_floor:.2f})"
+        else:
+            f_status = (
+                f"FAIL — {len(comp.floor_violations)} record(s) below "
+                f"{comp.individual_floor*100:.0f}% of target: {', '.join(comp.floor_violations)} "
+                f"(worst min ratio = {comp.worst_floor_ratio:.2f})"
+            )
+        st.markdown(
+            f"**{comp.code} individual-record floor (≥ {comp.individual_floor*100:.0f}% target):** "
+            f":{f_colour}[{f_status}]"
+        )
 
 # ── Scale factors table ───────────────────────────────────────────────────────
 st.markdown("### Scale Factors")
@@ -666,25 +690,27 @@ st.dataframe(_styled, use_container_width=True, hide_index=True)
 st.markdown("### QA/QC Plots")
 alpha_plot = compliance_results[0].alpha_h
 code_plot  = compliance_results[0].code
+# Floor line shown when any checked code defines an individual-record floor (EC8-2 → 0.50)
+floor_plot = next((c.individual_floor for c in compliance_results if c.individual_floor is not None), None)
 
 st.plotly_chart(plot_spectra_overlay(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot,
+    params["t_min"], params["t_max"], alpha_plot, floor_frac=floor_plot,
 ), use_container_width=True)
 
 st.plotly_chart(plot_spectra_overlay_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot,
+    params["t_min"], params["t_max"], alpha_plot, floor_frac=floor_plot,
 ), use_container_width=True)
 
 st.plotly_chart(plot_deviation_ratio(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot, code_plot,
+    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot,
 ), use_container_width=True)
 
 st.plotly_chart(plot_deviation_ratio_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot, code_plot,
+    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot,
 ), use_container_width=True)
 
 # ── Design Note ───────────────────────────────────────────────────────────────

@@ -158,7 +158,8 @@ def _write_summary(wb, scaling_results, compliance_results, periods):
             cell.fill = PatternFill("solid", fgColor=_GREEN if pass_val else _RED)
             row += 1
         if comp.min_records_warning:
-            min_r = {"ASCE 7-22": 11, "EC8-1": 3}[comp.code]
+            from core.compliance import MIN_RECORDS
+            min_r = MIN_RECORDS[comp.code]
             ws.cell(row=row, column=1,
                     value=f"⚠ Record count below {comp.code} minimum ({min_r})")
             ws.cell(row=row, column=1).font = Font(color="FFFF0000")
