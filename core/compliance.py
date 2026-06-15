@@ -152,7 +152,8 @@ def check_compliance(
 
     if band is not None:
         band_lower, band_upper = band
-        within_band_h = (ratio_h_range >= band_lower) & (ratio_h_range <= band_upper)
+        # D.3(8a): ratio strictly greater than lower edge, less than or equal to upper edge
+        within_band_h = (ratio_h_range > band_lower) & (ratio_h_range <= band_upper)
         band_pass_h = bool(np.all(within_band_h))
         avg_pass_h = bool(avg_ratio_h > avg_min) if avg_min is not None else None
         # Deficiency measured against the lower band edge (how far below 0.75)
@@ -224,7 +225,7 @@ def check_compliance(
         worst_period_v = float(periods_v[worst_idx_v])
 
         if band is not None:
-            within_band_v = (ratio_v_range >= band_lower) & (ratio_v_range <= band_upper)
+            within_band_v = (ratio_v_range > band_lower) & (ratio_v_range <= band_upper)
             band_pass_v = bool(np.all(within_band_v))
             avg_pass_v = bool(avg_ratio_v > avg_min) if avg_min is not None else None
             deficiency_v = max(0.0, float(np.max(band_lower - ratio_v_range)))

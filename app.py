@@ -724,6 +724,17 @@ floor_plot = next((c.individual_floor for c in compliance_results if c.individua
 # Band edges (EC8-2 → 0.75/1.30) shown on the deviation-ratio plots
 _band_comp = next((c for c in compliance_results if c.band_lower is not None), None)
 band_plot = (_band_comp.band_lower, _band_comp.band_upper) if _band_comp else None
+# EC8-2 D.3(8a) check results stamped on the deviation-ratio plots
+ec8_checks_plot = None
+if _band_comp is not None:
+    ec8_checks_plot = {
+        "band_lower": _band_comp.band_lower,
+        "band_upper": _band_comp.band_upper,
+        "band_pass": _band_comp.band_pass_h,
+        "avg_min": _band_comp.avg_min,
+        "avg_ratio": _band_comp.avg_ratio_h,
+        "avg_pass": _band_comp.avg_pass_h,
+    }
 
 st.plotly_chart(plot_spectra_overlay(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
@@ -737,12 +748,12 @@ st.plotly_chart(plot_spectra_overlay_zoomed(
 
 st.plotly_chart(plot_deviation_ratio(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot, band=band_plot,
+    params["t_min"], params["t_max"], alpha_plot, code_plot, band=band_plot, ec8_checks=ec8_checks_plot,
 ), use_container_width=True)
 
 st.plotly_chart(plot_deviation_ratio_zoomed(
     PERIOD_ARRAY, scaled_combined, sa_target_h_interp,
-    params["t_min"], params["t_max"], alpha_plot, code_plot, floor_frac=floor_plot, band=band_plot,
+    params["t_min"], params["t_max"], alpha_plot, code_plot, band=band_plot, ec8_checks=ec8_checks_plot,
 ), use_container_width=True)
 
 # ── Design Note ───────────────────────────────────────────────────────────────

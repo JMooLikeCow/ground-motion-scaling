@@ -74,6 +74,30 @@ def _range_band(fig, t_min, t_max, row=None, col=None):
         )
 
 
+def _ec8_check_annotation(fig, checks):
+    """Stamp the EC8-2 Annex D.3(8a) band + average check results onto the figure."""
+    if not checks:
+        return
+    bl, bu = checks["band_lower"], checks["band_upper"]
+    bp, ap = checks["band_pass"], checks["avg_pass"]
+    avg, amin = checks["avg_ratio"], checks["avg_min"]
+    mark = lambda p: "✓" if p else "✗"
+    verdict = lambda p: "MET" if p else "NOT MET"
+    text = (
+        "<b>EC8-2 Annex D.3(8a) compliance</b><br>"
+        f"{mark(bp)} {bl:.2f} &lt; mean/target ≤ {bu:.2f} : <b>{verdict(bp)}</b><br>"
+        f"{mark(ap)} average mean/target &gt; {amin:.2f} (avg = {avg:.3f}) : <b>{verdict(ap)}</b>"
+    )
+    all_pass = bool(bp) and bool(ap)
+    fig.add_annotation(
+        xref="paper", yref="paper", x=0.02, y=0.98,
+        xanchor="left", yanchor="top", align="left", showarrow=False,
+        text=text, font=dict(size=11, color="black"),
+        bordercolor=("#2ca02c" if all_pass else "#d62728"), borderwidth=1.2,
+        bgcolor=("rgba(220,245,220,0.92)" if all_pass else "rgba(250,224,224,0.92)"),
+    )
+
+
 # ── Plot 1: Full-range spectra overlay ────────────────────────────────────────
 
 def plot_spectra_overlay(
@@ -204,8 +228,8 @@ def plot_deviation_ratio(
     t_max: float,
     alpha_h: float,
     code: str,
-    floor_frac: float | None = None,
     band: tuple[float, float] | None = None,
+    ec8_checks: dict | None = None,
     title: str = "Deviation Ratio — Mean / Target (full range)",
 ) -> go.Figure:
     all_sa = np.vstack(list(scaled_spectra.values()))
@@ -243,14 +267,8 @@ def plot_deviation_ratio(
             x=periods, y=np.full_like(periods, alpha_h), name=f"α × Target (α = {alpha_h:.2f})",
             line=dict(color="red", width=1.5, dash="dash"),
         ))
-    if floor_frac is not None:
-        fig.add_trace(go.Scatter(
-            x=periods, y=np.full_like(periods, floor_frac),
-            name=f"{floor_frac*100:.0f}% Target floor (EC8-2)",
-            line=dict(color="red", width=1, dash="dot"),
-            opacity=0.60,
-        ))
     _range_band(fig, t_min, t_max)
+    _ec8_check_annotation(fig, ec8_checks)
 
     fig.update_layout(
         title=dict(text=title, font=dict(color="black")),
@@ -271,8 +289,8 @@ def plot_deviation_ratio_zoomed(
     t_max: float,
     alpha_h: float,
     code: str,
-    floor_frac: float | None = None,
     band: tuple[float, float] | None = None,
+    ec8_checks: dict | None = None,
     title: str = "Deviation Ratio — Mean / Target (period range of interest)",
 ) -> go.Figure:
     mask = (periods >= t_min) & (periods <= t_max)
@@ -290,8 +308,6 @@ def plot_deviation_ratio_zoomed(
     # Ensure alpha and 1.0 are always visible
     y_min = min(y_min, alpha_h * 0.90)
     y_max = max(y_max, 1.05)
-    if floor_frac is not None:
-        y_min = min(y_min, floor_frac * 0.90)
     if band is not None:
         y_min = min(y_min, band[0] * 0.90)
         y_max = max(y_max, band[1] * 1.05)
@@ -326,13 +342,6 @@ def plot_deviation_ratio_zoomed(
             line=dict(color="red", width=1.5, dash="dash"),
             opacity=0.70,
         ))
-    if floor_frac is not None:
-        fig.add_trace(go.Scatter(
-            x=p_zoom, y=np.full_like(p_zoom, floor_frac),
-            name=f"{floor_frac*100:.0f}% Target floor (EC8-2)",
-            line=dict(color="red", width=1, dash="dot"),
-            opacity=0.60,
-        ))
 
     x_pad = (t_max - t_min) * 0.05
     fig.update_layout(
@@ -342,5 +351,6 @@ def plot_deviation_ratio_zoomed(
         **_base(),
     )
     _range_band(fig, t_min, t_max)
+    _ec8_check_annotation(fig, ec8_checks)
     return fig
 
